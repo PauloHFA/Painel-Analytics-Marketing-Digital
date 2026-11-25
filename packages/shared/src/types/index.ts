@@ -154,7 +154,17 @@ export interface ResumoMetricas {
   usuariosGA4: number;
   viewsInstagram: number;
   alcanceInstagram: number;
+  novosSeguidoresInstagram: number;
   engajamentoInstagram: number; // percentual
+}
+
+export interface OrigemMidiaGA4 {
+  origemMidia: string;
+  sessoes: number;
+  usuarios: number;
+  conversoes: number;
+  receita: number;
+  percentualSessoes: number;
 }
 
 export interface VariacaoMetrica {
@@ -271,5 +281,16 @@ export interface AgendamentoRelatorio {
   ativo: boolean;
   ultimoEnvio?: string;
   statusUltimoEnvio?: 'sucesso' | 'erro';
+}
+
+export interface AuditoriaLog {
+  id: string;
+  usuarioId: string | null;
+  acao: string;
+  entidade: string;
+  entidadeId?: string;
+  detalhes?: Record<string, any>;
+  ip?: string;
+  criadoEm: string;
 }
 

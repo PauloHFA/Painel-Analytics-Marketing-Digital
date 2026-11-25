@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { AgenciaMarca } from '@dashboard/shared';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { UUID_USUARIOS } from '../constants/ids';
 import { RefreshCw, Printer, User, FileSpreadsheet, Moon, Sun, Maximize2, Minimize2 } from 'lucide-react';
 
 interface HeaderProps {
@@ -8,6 +10,7 @@ interface HeaderProps {
   onExportCsv: () => void;
   onRefresh: () => void;
   minutosDesdeAtualizacao: number;
+  marca?: AgenciaMarca;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -15,6 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   onExportCsv,
   onRefresh,
   minutosDesdeAtualizacao,
+  marca,
 }) => {
   const { usuario, usuariosDisponiveis, loginComo } = useAuth();
   const { isDark, toggleTheme } = useTheme();
@@ -35,12 +39,25 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand / Logo */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
-            GM
-          </div>
+          {marca?.logoUrl ? (
+            <img
+              src={marca.logoUrl}
+              alt={marca.nome}
+              className="w-10 h-10 rounded-lg object-cover shadow-sm border border-slate-200 dark:border-slate-700"
+            />
+          ) : (
+            <div
+              className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-sm"
+              style={{ backgroundColor: marca?.corPrimaria || '#2563eb' }}
+            >
+              {(marca?.nome || 'GM').slice(0, 2).toUpperCase()}
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-bold text-slate-900 dark:text-white text-base leading-tight">GrowMetrics Digital</h1>
+              <h1 className="font-bold text-slate-900 dark:text-white text-base leading-tight">
+                {marca?.nome || 'GrowMetrics Digital'}
+              </h1>
               <span className="text-[10px] font-semibold tracking-wide uppercase px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
                 BI Multicliente
               </span>
@@ -105,7 +122,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="relative flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5">
             <User className="w-4 h-4 text-slate-500 dark:text-slate-400" />
             <select
-              value={usuario?.id || 'usr-admin'}
+              value={usuario?.id || UUID_USUARIOS.ADMIN}
               onChange={(e) => loginComo(e.target.value)}
               className="bg-transparent text-xs font-medium text-slate-800 dark:text-slate-200 outline-none cursor-pointer pr-1"
             >

@@ -5,6 +5,7 @@ import {
   SerieComparativa,
   MetricasPorCanal,
   ResumoCampanha,
+  OrigemMidiaGA4,
   calcularCTR,
   calcularCPC,
   calcularCPM,
@@ -36,16 +37,16 @@ function filtrarPorJanela<T extends { data: string; clienteId: string }>(
 }
 
 function calcularDatasComparativas(inicio: string, fim: string, modo: 'anterior' | 'ano_anterior') {
-  const dInicio = new Date(inicio);
-  const dFim = new Date(fim);
+  const dInicio = new Date(`${inicio}T00:00:00Z`);
+  const dFim = new Date(`${fim}T00:00:00Z`);
   const duracaoMs = dFim.getTime() - dInicio.getTime();
   const diasDuracao = Math.round(duracaoMs / (1000 * 60 * 60 * 24)) + 1;
 
   if (modo === 'ano_anterior') {
     const dInicioAno = new Date(dInicio);
-    dInicioAno.setFullYear(dInicio.getFullYear() - 1);
+    dInicioAno.setUTCFullYear(dInicio.getUTCFullYear() - 1);
     const dFimAno = new Date(dFim);
-    dFimAno.setFullYear(dFim.getFullYear() - 1);
+    dFimAno.setUTCFullYear(dFim.getUTCFullYear() - 1);
     return {
       inicioComp: dInicioAno.toISOString().slice(0, 10),
       fimComp: dFimAno.toISOString().slice(0, 10),
@@ -54,9 +55,9 @@ function calcularDatasComparativas(inicio: string, fim: string, modo: 'anterior'
 
   // modo 'anterior'
   const dFimAnt = new Date(dInicio);
-  dFimAnt.setDate(dInicio.getDate() - 1);
+  dFimAnt.setUTCDate(dInicio.getUTCDate() - 1);
   const dInicioAnt = new Date(dFimAnt);
-  dInicioAnt.setDate(dFimAnt.getDate() - (diasDuracao - 1));
+  dInicioAnt.setUTCDate(dFimAnt.getUTCDate() - (diasDuracao - 1));
 
   return {
     inicioComp: dInicioAnt.toISOString().slice(0, 10),
@@ -111,12 +112,14 @@ export function consolidarResumo(
   const instaFiltrados = filtrarPorJanela(store.fatosInstagram, clienteId, inicio, fim);
   let viewsInstagram = 0;
   let alcanceInstagram = 0;
+  let novosSeguidoresInstagram = 0;
   let interacoesInstagram = 0;
 
   if (canais.includes('instagram')) {
     instaFiltrados.forEach((i) => {
       viewsInstagram += i.views;
       alcanceInstagram += i.alcance;
+      novosSeguidoresInstagram += i.novosSeguidores;
       interacoesInstagram += i.interacoes;
     });
   }
@@ -137,7 +140,8 @@ export function consolidarResumo(
   const cliente = store.clientes.find((c) => c.id === clienteId);
   const conversoesTotal = cliente?.fontePrimariaConversoes === 'ga4' && sessoesGA4 > 0 ? conversoesGA4 : conversoesAds;
 
-  const receitaTotal = receitaGA4 > 0 ? receitaGA4 : (valorConversaoAds + receitaManual);
+  const receitaBase = receitaGA4 > 0 ? receitaGA4 : valorConversaoAds;
+  const receitaTotal = receitaBase + receitaManual;
   const custosTotais = investimentoTotal + custosExtrasTotal;
 
   return {
@@ -158,6 +162,7 @@ export function consolidarResumo(
     usuariosGA4,
     viewsInstagram,
     alcanceInstagram,
+    novosSeguidoresInstagram,
     engajamentoInstagram: calcularTaxaEngajamento(interacoesInstagram, alcanceInstagram),
   };
 }
@@ -209,9 +214,9 @@ export function gerarSerieTemporal(params: ParametrosConsultaMetricas): SerieCom
   function agruparPorData(inicio: string, fim: string): PontoSerieTemporal[] {
     const pontosMap = new Map<string, PontoSerieTemporal>();
 
-    // Inicializar todos os dias do intervalo
-    const dAtual = new Date(inicio);
-    const dFim = new Date(fim);
+    // Inicializar todos os dias do intervalo em UTC
+    const dAtual = new Date(`${inicio}T00:00:00Z`);
+    const dFim = new Date(`${fim}T00:00:00Z`);
     while (dAtual <= dFim) {
       const dStr = dAtual.toISOString().slice(0, 10);
       const partes = dStr.split('-');
@@ -227,7 +232,7 @@ export function gerarSerieTemporal(params: ParametrosConsultaMetricas): SerieCom
         sessoes: 0,
         viewsInstagram: 0,
       });
-      dAtual.setDate(dAtual.getDate() + 1);
+      dAtual.setUTCDate(dAtual.getUTCDate() + 1);
     }
 
     // Acumular Ads
@@ -268,15 +273,73 @@ export function gerarSerieTemporal(params: ParametrosConsultaMetricas): SerieCom
       });
     }
 
+    // Acumular Entradas Manuais / CRM
+    const entradas = filtrarPorJanela(store.entradasManuais, params.clienteId, inicio, fim);
+    entradas.forEach((e) => {
+      const p = pontosMap.get(e.data);
+      if (p) {
+        p.receita += e.receita;
+      }
+    });
+
     return Array.from(pontosMap.values());
   }
 
-  const serieAtual = agruparPorData(params.inicio, params.fim);
+  function agregarPorGranularidade(
+    pontos: PontoSerieTemporal[],
+    granularidade: 'dia' | 'semana' | 'mes'
+  ): PontoSerieTemporal[] {
+    if (granularidade === 'dia') return pontos;
+
+    const grupos = new Map<string, PontoSerieTemporal>();
+    pontos.forEach((p) => {
+      let chave = p.dataCompleta;
+      let label = p.data;
+
+      if (granularidade === 'mes') {
+        const [ano, mes] = p.dataCompleta.split('-');
+        chave = `${ano}-${mes}`;
+        label = `${mes}/${ano}`;
+      } else if (granularidade === 'semana') {
+        const d = new Date(`${p.dataCompleta}T00:00:00Z`);
+        const diaSem = (d.getUTCDay() + 6) % 7; // 0 = segunda
+        d.setUTCDate(d.getUTCDate() - diaSem);
+        chave = d.toISOString().slice(0, 10);
+        const [, mm, dd] = chave.split('-');
+        label = `Sem ${dd}/${mm}`;
+      }
+
+      const atual = grupos.get(chave) || {
+        data: label,
+        dataCompleta: chave,
+        investimento: 0,
+        cliques: 0,
+        impressoes: 0,
+        conversoes: 0,
+        receita: 0,
+        sessoes: 0,
+        viewsInstagram: 0,
+      };
+      atual.investimento = Number((atual.investimento + p.investimento).toFixed(2));
+      atual.cliques += p.cliques;
+      atual.impressoes += p.impressoes;
+      atual.conversoes += p.conversoes;
+      atual.receita = Number((atual.receita + p.receita).toFixed(2));
+      atual.sessoes += p.sessoes;
+      atual.viewsInstagram += p.viewsInstagram;
+      grupos.set(chave, atual);
+    });
+
+    return Array.from(grupos.values());
+  }
+
+  const granularidade = params.granularidade || 'dia';
+  const serieAtual = agregarPorGranularidade(agruparPorData(params.inicio, params.fim), granularidade);
 
   let serieComparativa: PontoSerieTemporal[] = [];
   if (params.comparar && params.comparar !== 'nenhum') {
     const { inicioComp, fimComp } = calcularDatasComparativas(params.inicio, params.fim, params.comparar);
-    serieComparativa = agruparPorData(inicioComp, fimComp);
+    serieComparativa = agregarPorGranularidade(agruparPorData(inicioComp, fimComp), granularidade);
   }
 
   return {
@@ -286,8 +349,13 @@ export function gerarSerieTemporal(params: ParametrosConsultaMetricas): SerieCom
 }
 
 export function obterMetricasPorCanal(params: ParametrosConsultaMetricas): MetricasPorCanal[] {
-  const ads = filtrarPorJanela(store.fatosAds, params.clienteId, params.inicio, params.fim);
-  const ga4 = filtrarPorJanela(store.fatosGA4, params.clienteId, params.inicio, params.fim);
+  const canaisFiltro = params.canais && params.canais.length > 0 ? params.canais : ['google_ads', 'meta_ads', 'ga4', 'instagram'];
+  const ads = filtrarPorJanela(store.fatosAds, params.clienteId, params.inicio, params.fim).filter((a) =>
+    canaisFiltro.includes(a.canal)
+  );
+  const ga4 = canaisFiltro.includes('ga4')
+    ? filtrarPorJanela(store.fatosGA4, params.clienteId, params.inicio, params.fim)
+    : [];
 
   const dadosGAds = ads.filter((a) => a.canal === 'google_ads');
   const dadosMeta = ads.filter((a) => a.canal === 'meta_ads');
@@ -322,11 +390,10 @@ export function obterMetricasPorCanal(params: ParametrosConsultaMetricas): Metri
   }
 
   // Canal GA4 (Tráfego Orgânico / Direto)
-  let sessoesGA4 = 0, convGA4 = 0, recGA4 = 0;
+  let sessoesGA4 = 0, convGA4 = 0;
   ga4.forEach((g) => {
     sessoesGA4 += g.sessoes;
     convGA4 += g.conversoes;
-    recGA4 += g.receita;
   });
 
   const ga4Item: MetricasPorCanal = {
@@ -340,11 +407,14 @@ export function obterMetricasPorCanal(params: ParametrosConsultaMetricas): Metri
     participacaoInvestimento: 0,
   };
 
-  return [gads, meta, ga4Item];
+  return [gads, meta, ga4Item].filter((item) => canaisFiltro.includes(item.canal));
 }
 
 export function obterCampanhas(params: ParametrosConsultaMetricas): ResumoCampanha[] {
-  const ads = filtrarPorJanela(store.fatosAds, params.clienteId, params.inicio, params.fim);
+  const canaisFiltro = params.canais && params.canais.length > 0 ? params.canais : ['google_ads', 'meta_ads'];
+  const ads = filtrarPorJanela(store.fatosAds, params.clienteId, params.inicio, params.fim).filter((a) =>
+    canaisFiltro.includes(a.canal)
+  );
 
   const campanhasMap = new Map<string, ResumoCampanha>();
 
@@ -386,5 +456,36 @@ export function obterCampanhas(params: ParametrosConsultaMetricas): ResumoCampan
 
   // Ordenar por maior investimento
   return lista.sort((a, b) => b.investimento - a.investimento);
+}
+
+export function obterOrigensGA4(clienteId: string, inicio: string, fim: string): OrigemMidiaGA4[] {
+  const ga4 = filtrarPorJanela(store.fatosGA4, clienteId, inicio, fim);
+  const mapa = new Map<string, OrigemMidiaGA4>();
+  let totalSessoes = 0;
+
+  ga4.forEach((g) => {
+    totalSessoes += g.sessoes;
+    const atual = mapa.get(g.origemMidia) || {
+      origemMidia: g.origemMidia,
+      sessoes: 0,
+      usuarios: 0,
+      conversoes: 0,
+      receita: 0,
+      percentualSessoes: 0,
+    };
+    atual.sessoes += g.sessoes;
+    atual.usuarios += g.usuarios;
+    atual.conversoes += g.conversoes;
+    atual.receita += g.receita;
+    mapa.set(g.origemMidia, atual);
+  });
+
+  const lista = Array.from(mapa.values()).map((item) => ({
+    ...item,
+    receita: Number(item.receita.toFixed(2)),
+    percentualSessoes: totalSessoes > 0 ? Number(((item.sessoes / totalSessoes) * 100).toFixed(1)) : 0,
+  }));
+
+  return lista.sort((a, b) => b.sessoes - a.sessoes);
 }
 

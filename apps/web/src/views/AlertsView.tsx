@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useFilters } from '../context/FilterContext';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { fetchApi } from '../services/api';
 import { AlertaMetrica, MetaCliente } from '@dashboard/shared';
 import { AlertTriangle, AlertCircle, Target, CheckCircle2, Save } from 'lucide-react';
@@ -8,6 +9,7 @@ import { AlertTriangle, AlertCircle, Target, CheckCircle2, Save } from 'lucide-r
 export const AlertsView: React.FC = () => {
   const { clienteId, clienteAtual, inicio, fim } = useFilters();
   const { usuario } = useAuth();
+  const { mostrarToast } = useToast();
   const [alertas, setAlertas] = useState<AlertaMetrica[]>([]);
   const [meta, setMeta] = useState<MetaCliente | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -41,7 +43,7 @@ export const AlertsView: React.FC = () => {
       setTimeout(() => setSucesso(false), 3000);
       carregarDados();
     } catch (err: any) {
-      alert(err.message || 'Erro ao salvar metas.');
+      mostrarToast(err.message || 'Erro ao salvar metas.', 'erro');
     } finally {
       setSalvando(false);
     }

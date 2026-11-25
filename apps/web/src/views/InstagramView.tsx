@@ -54,7 +54,9 @@ export const InstagramView: React.FC<Props> = ({ resumo, midias }) => {
             <span className="text-xs font-semibold uppercase tracking-wider">Novos Seguidores</span>
             <UserPlus className="w-4 h-4 text-violet-500" />
           </div>
-          <span className="text-2xl font-bold text-slate-900 dark:text-white">+342</span>
+          <span className="text-2xl font-bold text-slate-900 dark:text-white">
+            +{formatarNumero(resumo.novosSeguidoresInstagram)}
+          </span>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">Crescimento líquido da comunidade</p>
         </div>
       </div>

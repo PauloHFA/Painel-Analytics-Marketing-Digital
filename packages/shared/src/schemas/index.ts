@@ -6,7 +6,7 @@ export const LoginSchema = z.object({
 });
 
 export const FiltroMetricasSchema = z.object({
-  clienteId: z.string().uuid().or(z.string().min(1)),
+  clienteId: z.string().uuid('clienteId deve ser um UUID válido'),
   inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato de data inválido (AAAA-MM-DD)'),
   fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato de data inválido (AAAA-MM-DD)'),
   canais: z.string().optional(), // separados por vírgula
@@ -15,7 +15,7 @@ export const FiltroMetricasSchema = z.object({
 });
 
 export const EntradaManualSchema = z.object({
-  clienteId: z.string(),
+  clienteId: z.string().uuid('clienteId deve ser um UUID válido'),
   data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   receita: z.number().min(0, 'Receita não pode ser negativa'),
   novosClientes: z.number().int().min(0, 'Número de novos clientes deve ser inteiro não negativo'),
@@ -41,8 +41,12 @@ export const CriarClienteSchema = z.object({
   fontePrimariaConversoes: z.enum(['ga4', 'plataformas']).default('ga4'),
 });
 
+export const AtualizarClienteSchema = CriarClienteSchema.partial().extend({
+  ativo: z.boolean().optional(),
+});
+
 export const ConectarContaSchema = z.object({
-  clienteId: z.string(),
+  clienteId: z.string().uuid('clienteId deve ser um UUID válido'),
   canal: z.enum(['ga4', 'google_ads', 'meta_ads', 'instagram']),
   nome: z.string().min(2),
   idExterno: z.string().min(1),
@@ -58,7 +62,7 @@ export const MetaClienteSchema = z.object({
 });
 
 export const CriarRelatorioSchema = z.object({
-  clienteId: z.string(),
+  clienteId: z.string().uuid('clienteId deve ser um UUID válido'),
   formato: z.enum(['pdf', 'csv']).default('pdf'),
   inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -75,5 +79,19 @@ export const AgendamentoRelatorioSchema = z.object({
   webhookWhatsapp: z.string().url().optional().or(z.literal('')),
   formato: z.enum(['pdf', 'csv', 'ambos']).default('pdf'),
   ativo: z.boolean().default(true),
+});
+
+export const WebhookCrmSchema = z.object({
+  evento: z.string().optional(),
+  receita: z.coerce.number().min(0).default(0),
+  novosClientes: z.coerce.number().int().min(0).default(1),
+  custosExtras: z.coerce.number().min(0).default(0),
+  contato: z
+    .object({
+      nome: z.string().optional(),
+      email: z.string().email().optional(),
+    })
+    .optional(),
+  observacao: z.string().optional(),
 });
 

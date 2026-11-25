@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useFilters } from '../context/FilterContext';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { fetchApi } from '../services/api';
+import { resolverUsuarioToken } from '../constants/ids';
 import { RelatorioGerado, AgendamentoRelatorio } from '@dashboard/shared';
 import {
   FileText,
@@ -21,10 +23,12 @@ import {
 export const ReportsView: React.FC = () => {
   const { clienteId, clienteAtual, inicio, fim, canais, comparar } = useFilters();
   const { usuario } = useAuth();
+  const { mostrarToast } = useToast();
   const [relatorios, setRelatorios] = useState<RelatorioGerado[]>([]);
   const [agendamentos, setAgendamentos] = useState<AgendamentoRelatorio[]>([]);
   const [solicitando, setSolicitando] = useState(false);
   const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null);
+  const [confirmandoExclusaoId, setConfirmandoExclusaoId] = useState<string | null>(null);
 
   // Form de novo agendamento
   const [exibirFormAgendamento, setExibirFormAgendamento] = useState(false);
@@ -69,7 +73,7 @@ export const ReportsView: React.FC = () => {
       setTimeout(() => setMensagemSucesso(null), 4000);
       carregarRelatorios();
     } catch (err: any) {
-      alert(err.message || 'Erro ao solicitar relatório.');
+      mostrarToast(err.message || 'Erro ao solicitar relatório.', 'erro');
     } finally {
       setSolicitando(false);
     }
@@ -101,33 +105,71 @@ export const ReportsView: React.FC = () => {
       setTimeout(() => setMensagemSucesso(null), 4000);
       carregarRelatorios();
     } catch (err: any) {
-      alert(err.message || 'Erro ao criar agendamento.');
+      mostrarToast(err.message || 'Erro ao criar agendamento.', 'erro');
     }
   };
 
   const handleTestarAgendamento = async (id: string) => {
     try {
       const res = await fetchApi<{ mensagem: string }>(`/agendamentos/${id}/testar`, { method: 'POST' });
-      alert(res.mensagem);
+      mostrarToast(res.mensagem, 'sucesso');
       carregarRelatorios();
     } catch (err: any) {
-      alert(err.message || 'Falha ao testar disparo.');
+      mostrarToast(err.message || 'Falha ao testar disparo.', 'erro');
     }
   };
 
   const handleExcluirAgendamento = async (id: string) => {
-    if (!confirm('Deseja realmente remover este agendamento?')) return;
     try {
       await fetchApi(`/agendamentos/${id}`, { method: 'DELETE' });
+      setConfirmandoExclusaoId(null);
+      mostrarToast('Agendamento removido com sucesso.', 'sucesso');
       carregarRelatorios();
     } catch (err: any) {
-      alert(err.message || 'Erro ao excluir.');
+      mostrarToast(err.message || 'Erro ao excluir agendamento.', 'erro');
     }
   };
 
-  const handleDownloadCsvDireto = () => {
-    const token = localStorage.getItem('auth_token') || 'usr-rick';
-    window.open(`/api/v1/metricas/exportar-csv?clienteId=${clienteId}&inicio=${inicio}&fim=${fim}&token=${token}`, '_blank');
+  const handleDownloadCsvDireto = async () => {
+    try {
+      const token = resolverUsuarioToken(localStorage.getItem('auth_token'));
+      const resp = await fetch(`/api/v1/metricas/exportar-csv?clienteId=${clienteId}&inicio=${inicio}&fim=${fim}`, {
+        headers: { 'x-user-id': token },
+      });
+      if (!resp.ok) throw new Error(`Erro ${resp.status} ao exportar CSV`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `metricas_${clienteId}_${inicio}_${fim}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      mostrarToast(err.message || 'Falha ao exportar CSV.', 'erro');
+    }
+  };
+
+  const handleBaixarRelatorio = async (rel: RelatorioGerado) => {
+    try {
+      const token = resolverUsuarioToken(localStorage.getItem('auth_token'));
+      const resp = await fetch(`/api/v1/relatorios/${rel.id}/download`, {
+        headers: { 'x-user-id': token },
+      });
+      if (!resp.ok) throw new Error(`Erro ${resp.status} ao baixar relatório`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = rel.nomeArquivo;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      mostrarToast(err.message || 'Falha ao baixar relatório.', 'erro');
+    }
   };
 
   return (
@@ -242,15 +284,14 @@ export const ReportsView: React.FC = () => {
                     </td>
                     <td className="py-2.5 px-3 text-right">
                       {rel.status === 'concluido' ? (
-                        <a
-                          href={`/api/v1/relatorios/${rel.id}/download`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 px-2.5 py-1 rounded transition"
+                        <button
+                          type="button"
+                          onClick={() => handleBaixarRelatorio(rel)}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 px-2.5 py-1 rounded transition cursor-pointer"
                         >
                           <Download className="w-3.5 h-3.5" />
                           <span>Baixar</span>
-                        </a>
+                        </button>
                       ) : (
                         <span className="text-slate-400 dark:text-slate-500 text-xs">-</span>
                       )}
@@ -415,12 +456,33 @@ export const ReportsView: React.FC = () => {
                 </button>
 
                 {usuario?.perfil !== 'cliente' && (
-                  <button
-                    onClick={() => handleExcluirAgendamento(agd.id)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition rounded cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  confirmandoExclusaoId === agd.id ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleExcluirAgendamento(agd.id)}
+                        className="px-2 py-1 text-[11px] font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded cursor-pointer"
+                      >
+                        Confirmar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmandoExclusaoId(null)}
+                        className="px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmandoExclusaoId(agd.id)}
+                      aria-label={`Remover agendamento ${agd.titulo}`}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition rounded cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )
                 )}
               </div>
             </div>

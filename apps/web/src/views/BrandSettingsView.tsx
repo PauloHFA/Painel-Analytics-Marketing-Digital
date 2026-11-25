@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '../context/ToastContext';
 import { fetchApi } from '../services/api';
 import { AgenciaMarca } from '@dashboard/shared';
 import { Palette, CheckCircle2 } from 'lucide-react';
 
 export const BrandSettingsView: React.FC = () => {
+  const queryClient = useQueryClient();
+  const { mostrarToast } = useToast();
   const [marca, setMarca] = useState<AgenciaMarca | null>(null);
   const [sucesso, setSucesso] = useState(false);
 
@@ -22,10 +26,11 @@ export const BrandSettingsView: React.FC = () => {
         method: 'PUT',
         body: JSON.stringify(marca),
       });
+      await queryClient.invalidateQueries({ queryKey: ['agencia-marca'] });
       setSucesso(true);
       setTimeout(() => setSucesso(false), 3000);
     } catch (err: any) {
-      alert(err.message || 'Erro ao salvar marca');
+      mostrarToast(err.message || 'Erro ao salvar marca', 'erro');
     }
   };
 
@@ -79,6 +84,28 @@ export const BrandSettingsView: React.FC = () => {
               <span className="font-mono text-xs text-slate-700 dark:text-slate-300">{marca.corSecundaria}</span>
             </div>
           </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">URL do Logo</label>
+          <input
+            type="url"
+            value={marca.logoUrl}
+            onChange={(e) => setMarca({ ...marca, logoUrl: e.target.value })}
+            placeholder="https://..."
+            className="w-full text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Fonte Tipográfica</label>
+          <input
+            type="text"
+            value={marca.fonte}
+            onChange={(e) => setMarca({ ...marca, fonte: e.target.value })}
+            className="w-full text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
         </div>
 
         <div>

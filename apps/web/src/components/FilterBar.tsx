@@ -7,6 +7,9 @@ export const FilterBar: React.FC = () => {
   const {
     clienteId,
     setClienteId,
+    inicio,
+    fim,
+    setDatas,
     preset,
     setPreset,
     canais,
@@ -24,6 +27,7 @@ export const FilterBar: React.FC = () => {
     { id: '30d', label: '30 Dias' },
     { id: '90d', label: '90 Dias' },
     { id: 'este_mes', label: 'Este Mês' },
+    { id: 'mes_anterior', label: 'Mês Anterior' },
   ];
 
   const canaisDisponiveis = [
@@ -65,22 +69,43 @@ export const FilterBar: React.FC = () => {
           )}
         </div>
 
-        {/* Presets de Período */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-          <Calendar className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 ml-1.5 mr-0.5" />
-          {presets.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setPreset(p.id)}
-              className={`text-xs px-2.5 py-1 rounded-md font-medium transition ${
-                preset === p.id
-                  ? 'bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
+        {/* Presets e Intervalo Livre de Período */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+            <Calendar className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 ml-1.5 mr-0.5" />
+            {presets.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setPreset(p.id)}
+                className={`text-xs px-2.5 py-1 rounded-md font-medium transition ${
+                  preset === p.id
+                    ? 'bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 text-xs">
+            <input
+              type="date"
+              aria-label="Data inicial"
+              value={inicio}
+              max={fim}
+              onChange={(e) => e.target.value && setDatas(e.target.value, fim)}
+              className="border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 outline-none"
+            />
+            <span className="text-slate-400">a</span>
+            <input
+              type="date"
+              aria-label="Data final"
+              value={fim}
+              min={inicio}
+              onChange={(e) => e.target.value && setDatas(inicio, e.target.value)}
+              className="border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 outline-none"
+            />
+          </div>
         </div>
 
         {/* Seleção de Canais */}

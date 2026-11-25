@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useFilters } from '../context/FilterContext';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { fetchApi } from '../services/api';
 import { EntradaManual, formatarMoeda, formatarNumero } from '@dashboard/shared';
 import { PlusCircle, HelpCircle, CheckCircle2, Webhook, Copy, Check, Zap } from 'lucide-react';
@@ -8,6 +9,7 @@ import { PlusCircle, HelpCircle, CheckCircle2, Webhook, Copy, Check, Zap } from 
 export const ManualEntriesView: React.FC = () => {
   const { clienteId, clienteAtual } = useFilters();
   const { usuario } = useAuth();
+  const { mostrarToast } = useToast();
   const [entradas, setEntradas] = useState<EntradaManual[]>([]);
   const [sucesso, setSucesso] = useState(false);
   const [copiadoWebhook, setCopiadoWebhook] = useState(false);
@@ -52,7 +54,7 @@ export const ManualEntriesView: React.FC = () => {
       setObservacao('');
       carregarEntradas();
     } catch (err: any) {
-      alert(err.message);
+      mostrarToast(err.message || 'Erro ao salvar lançamento.', 'erro');
     }
   };
 
@@ -80,7 +82,7 @@ export const ManualEntriesView: React.FC = () => {
       setMensagemWebhook(res.mensagem);
       carregarEntradas();
     } catch (err: any) {
-      alert(err.message || 'Erro ao simular webhook de CRM.');
+      mostrarToast(err.message || 'Erro ao simular webhook de CRM.', 'erro');
     } finally {
       setSimulandoWebhook(false);
     }

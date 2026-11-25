@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useFilters } from '../context/FilterContext';
+import { useToast } from '../context/ToastContext';
 import { fetchApi } from '../services/api';
 import { ContaConectada } from '@dashboard/shared';
 import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, Layers } from 'lucide-react';
 
 export const ConnectionsView: React.FC = () => {
   const { clienteId, clienteAtual } = useFilters();
+  const { mostrarToast } = useToast();
   const [conexoes, setConexoes] = useState<ContaConectada[]>([]);
   const [sincronizandoId, setSincronizandoId] = useState<string | null>(null);
 
@@ -23,9 +25,10 @@ export const ConnectionsView: React.FC = () => {
     try {
       setSincronizandoId(contaId);
       await fetchApi(`/conexoes/${contaId}/sincronizar`, { method: 'POST' });
+      mostrarToast('Sincronização concluída com sucesso.', 'sucesso');
       carregarConexoes();
     } catch (err: any) {
-      alert(err.message || 'Falha ao sincronizar conta.');
+      mostrarToast(err.message || 'Falha ao sincronizar conta.', 'erro');
       carregarConexoes();
     } finally {
       setSincronizandoId(null);

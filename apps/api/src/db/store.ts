@@ -12,7 +12,9 @@ import {
   MetaCliente,
   RelatorioGerado,
   AgendamentoRelatorio,
+  AuditoriaLog,
 } from '@dashboard/shared';
+import { SEED_IDS, gerarUuidCliente, gerarUuidDeterministico, novoUuid } from './ids';
 
 export interface DataStore {
   marca: AgenciaMarca;
@@ -28,11 +30,12 @@ export interface DataStore {
   metas: MetaCliente[];
   relatorios: RelatorioGerado[];
   agendamentos: AgendamentoRelatorio[];
+  auditoria: AuditoriaLog[];
 }
 
 export function inicializarStore(): DataStore {
   const marca: AgenciaMarca = {
-    id: 'agencia-1',
+    id: SEED_IDS.AGENCIA,
     nome: 'Agência GrowMetrics Digital',
     logoUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=120&auto=format&fit=crop&q=80',
     corPrimaria: '#2563eb', // Azul Royal
@@ -45,7 +48,7 @@ export function inicializarStore(): DataStore {
   // Criação dos 60 clientes da agência (conforme especificado no PDF)
   const clientes: Cliente[] = [
     {
-      id: 'cli-01',
+      id: SEED_IDS.CLIENTES.TECHNOVA,
       nome: 'TechNova Soluções SaaS',
       documento: '12.345.678/0001-90',
       fusoHorario: 'America/Sao_Paulo',
@@ -55,7 +58,7 @@ export function inicializarStore(): DataStore {
       criadoEm: '2025-01-15T00:00:00Z',
     },
     {
-      id: 'cli-02',
+      id: SEED_IDS.CLIENTES.MODA_URBANA,
       nome: 'Moda Urbana E-commerce',
       documento: '23.456.789/0001-01',
       fusoHorario: 'America/Sao_Paulo',
@@ -65,7 +68,7 @@ export function inicializarStore(): DataStore {
       criadoEm: '2025-02-10T00:00:00Z',
     },
     {
-      id: 'cli-03',
+      id: SEED_IDS.CLIENTES.CLINICA_SAUDE,
       nome: 'Clínica Saúde & Estética',
       documento: '34.567.890/0001-12',
       fusoHorario: 'America/Sao_Paulo',
@@ -79,7 +82,7 @@ export function inicializarStore(): DataStore {
   // Adicionar outros clientes para completar a carteira de 60 clientes
   for (let i = 4; i <= 60; i++) {
     clientes.push({
-      id: `cli-${i < 10 ? '0' + i : i}`,
+      id: gerarUuidCliente(i),
       nome: `Cliente Corporativo ${i} - Brasil`,
       fusoHorario: 'America/Sao_Paulo',
       moeda: 'BRL',
@@ -92,7 +95,7 @@ export function inicializarStore(): DataStore {
   // Usuários com perfis definidos (Admin, Gestor, Cliente)
   const usuarios: Usuario[] = [
     {
-      id: 'usr-rick',
+      id: SEED_IDS.USUARIOS.RICK,
       nome: 'Rick (Colaborador / Admin)',
       email: 'rickphtb@gmail.com',
       perfil: 'admin',
@@ -101,7 +104,7 @@ export function inicializarStore(): DataStore {
       criadoEm: '2025-01-01T00:00:00Z',
     },
     {
-      id: 'usr-admin',
+      id: SEED_IDS.USUARIOS.ADMIN,
       nome: 'Ricardo Cardoso (Diretor)',
       email: 'admin@agencia.com',
       perfil: 'admin',
@@ -110,30 +113,34 @@ export function inicializarStore(): DataStore {
       criadoEm: '2025-01-01T00:00:00Z',
     },
     {
-      id: 'usr-gestor',
+      id: SEED_IDS.USUARIOS.GESTOR,
       nome: 'Mariana Gestora de Contas',
       email: 'gestor@agencia.com',
       perfil: 'gestor',
       ativo: true,
-      clientesIds: ['cli-01', 'cli-02', 'cli-03'],
+      clientesIds: [
+        SEED_IDS.CLIENTES.TECHNOVA,
+        SEED_IDS.CLIENTES.MODA_URBANA,
+        SEED_IDS.CLIENTES.CLINICA_SAUDE,
+      ],
       criadoEm: '2025-01-10T00:00:00Z',
     },
     {
-      id: 'usr-cliente-01',
+      id: SEED_IDS.USUARIOS.CLIENTE_01,
       nome: 'Carlos Mendes (TechNova)',
       email: 'carlos@technova.com.br',
       perfil: 'cliente',
       ativo: true,
-      clientesIds: ['cli-01'], // Estritamente isolado para cli-01
+      clientesIds: [SEED_IDS.CLIENTES.TECHNOVA],
       criadoEm: '2025-01-15T00:00:00Z',
     },
     {
-      id: 'usr-cliente-02',
+      id: SEED_IDS.USUARIOS.CLIENTE_02,
       nome: 'Beatriz Lima (Moda Urbana)',
       email: 'beatriz@modaurbana.com',
       perfil: 'cliente',
       ativo: true,
-      clientesIds: ['cli-02'],
+      clientesIds: [SEED_IDS.CLIENTES.MODA_URBANA],
       criadoEm: '2025-02-10T00:00:00Z',
     },
   ];
@@ -142,8 +149,8 @@ export function inicializarStore(): DataStore {
   const contas: ContaConectada[] = [
     // TechNova
     {
-      id: 'conta-tn-ga4',
-      clienteId: 'cli-01',
+      id: SEED_IDS.CONTAS.TN_GA4,
+      clienteId: SEED_IDS.CLIENTES.TECHNOVA,
       canal: 'ga4',
       idExterno: 'properties/458921789',
       nome: 'GA4 - TechNova Produção',
@@ -154,8 +161,8 @@ export function inicializarStore(): DataStore {
       minutosDesdeSincronizacao: 15,
     },
     {
-      id: 'conta-tn-gads',
-      clienteId: 'cli-01',
+      id: SEED_IDS.CONTAS.TN_GADS,
+      clienteId: SEED_IDS.CLIENTES.TECHNOVA,
       canal: 'google_ads',
       idExterno: '849-201-9921',
       nome: 'Google Ads - TechNova Institucional & Pesquisa',
@@ -166,8 +173,8 @@ export function inicializarStore(): DataStore {
       minutosDesdeSincronizacao: 32,
     },
     {
-      id: 'conta-tn-meta',
-      clienteId: 'cli-01',
+      id: SEED_IDS.CONTAS.TN_META,
+      clienteId: SEED_IDS.CLIENTES.TECHNOVA,
       canal: 'meta_ads',
       idExterno: 'act_98231049281',
       nome: 'Meta Ads - TechNova Leads & Retargeting',
@@ -178,8 +185,8 @@ export function inicializarStore(): DataStore {
       minutosDesdeSincronizacao: 48,
     },
     {
-      id: 'conta-tn-insta',
-      clienteId: 'cli-01',
+      id: SEED_IDS.CONTAS.TN_INSTA,
+      clienteId: SEED_IDS.CLIENTES.TECHNOVA,
       canal: 'instagram',
       idExterno: '178414019283749',
       nome: '@technova.saas Oficial',
@@ -192,8 +199,8 @@ export function inicializarStore(): DataStore {
 
     // Moda Urbana
     {
-      id: 'conta-mu-ga4',
-      clienteId: 'cli-02',
+      id: SEED_IDS.CONTAS.MU_GA4,
+      clienteId: SEED_IDS.CLIENTES.MODA_URBANA,
       canal: 'ga4',
       idExterno: 'properties/991823712',
       nome: 'GA4 - Moda Urbana Store',
@@ -204,8 +211,8 @@ export function inicializarStore(): DataStore {
       minutosDesdeSincronizacao: 22,
     },
     {
-      id: 'conta-mu-meta',
-      clienteId: 'cli-02',
+      id: SEED_IDS.CONTAS.MU_META,
+      clienteId: SEED_IDS.CLIENTES.MODA_URBANA,
       canal: 'meta_ads',
       idExterno: 'act_4455667788',
       nome: 'Meta Ads - Moda Urbana Catálogo',
@@ -225,15 +232,15 @@ export function inicializarStore(): DataStore {
   const entradasManuais: EntradaManual[] = [];
 
   const campanhasGAds = [
-    { id: 'cmp-g-01', nome: 'Pesquisa - Institucional Fundo de Funil' },
-    { id: 'cmp-g-02', nome: 'Pesquisa - Soluções de TI e SaaS' },
-    { id: 'cmp-g-03', nome: 'Performance Max - Aquisição Brasil' },
+    { id: gerarUuidDeterministico('e1000001', 1), nome: 'Pesquisa - Institucional Fundo de Funil' },
+    { id: gerarUuidDeterministico('e1000001', 2), nome: 'Pesquisa - Soluções de TI e SaaS' },
+    { id: gerarUuidDeterministico('e1000001', 3), nome: 'Performance Max - Aquisição Brasil' },
   ];
 
   const campanhasMeta = [
-    { id: 'cmp-m-01', nome: 'Meta Leads - Ebook & Demonstração' },
-    { id: 'cmp-m-02', nome: 'Meta Remarketing - Visitantes 30d' },
-    { id: 'cmp-m-03', nome: 'Meta Prospecção - Vídeo Views' },
+    { id: gerarUuidDeterministico('e1000002', 1), nome: 'Meta Leads - Ebook & Demonstração' },
+    { id: gerarUuidDeterministico('e1000002', 2), nome: 'Meta Remarketing - Visitantes 30d' },
+    { id: gerarUuidDeterministico('e1000002', 3), nome: 'Meta Prospecção - Vídeo Views' },
   ];
 
   const origensGA4 = [
@@ -267,9 +274,9 @@ export function inicializarStore(): DataStore {
       const valorConversao = conversoes * (240 + idx * 60);
 
       fatosAds.push({
-        id: `f-gads-${diasAtras}-${idx}`,
-        clienteId: 'cli-01',
-        contaId: 'conta-tn-gads',
+        id: novoUuid(),
+        clienteId: SEED_IDS.CLIENTES.TECHNOVA,
+        contaId: SEED_IDS.CONTAS.TN_GADS,
         canal: 'google_ads',
         data: dataStr,
         campanhaId: cmp.id,
@@ -294,9 +301,9 @@ export function inicializarStore(): DataStore {
       const valorConversao = conversoes * (190 + idx * 50);
 
       fatosAds.push({
-        id: `f-meta-${diasAtras}-${idx}`,
-        clienteId: 'cli-01',
-        contaId: 'conta-tn-meta',
+        id: novoUuid(),
+        clienteId: SEED_IDS.CLIENTES.TECHNOVA,
+        contaId: SEED_IDS.CONTAS.TN_META,
         canal: 'meta_ads',
         data: dataStr,
         campanhaId: cmp.id,
@@ -310,7 +317,7 @@ export function inicializarStore(): DataStore {
     });
 
     // --- Fatos GA4 (TechNova) ---
-    origensGA4.forEach((origem, idx) => {
+    origensGA4.forEach((origem) => {
       const baseSessoes = Math.round((450 * origem.fator) * fatorFimDeSemana * fatorCrescimento);
       const usuarios = Math.round(baseSessoes * 0.82);
       const novosUsuarios = Math.round(usuarios * 0.65);
@@ -318,9 +325,9 @@ export function inicializarStore(): DataStore {
       const receita = conversoes * 280;
 
       fatosGA4.push({
-        id: `f-ga4-${diasAtras}-${idx}`,
-        clienteId: 'cli-01',
-        contaId: 'conta-tn-ga4',
+        id: novoUuid(),
+        clienteId: SEED_IDS.CLIENTES.TECHNOVA,
+        contaId: SEED_IDS.CONTAS.TN_GA4,
         data: dataStr,
         origemMidia: origem.origem,
         sessoes: baseSessoes,
@@ -339,9 +346,9 @@ export function inicializarStore(): DataStore {
     const novosSeguidores = Math.max(2, Math.round(visitasPerfil * 0.12));
 
     fatosInstagram.push({
-      id: `f-insta-${diasAtras}`,
-      clienteId: 'cli-01',
-      contaId: 'conta-tn-insta',
+      id: novoUuid(),
+      clienteId: SEED_IDS.CLIENTES.TECHNOVA,
+      contaId: SEED_IDS.CONTAS.TN_INSTA,
       data: dataStr,
       views: baseViews,
       alcance,
@@ -357,8 +364,8 @@ export function inicializarStore(): DataStore {
       const custosExtras = 350; // Custos de onboarding/ferramentas
 
       entradasManuais.push({
-        id: `em-${diasAtras}`,
-        clienteId: 'cli-01',
+        id: novoUuid(),
+        clienteId: SEED_IDS.CLIENTES.TECHNOVA,
         data: dataStr,
         receita,
         novosClientes,
@@ -371,9 +378,9 @@ export function inicializarStore(): DataStore {
   // Mídias do Instagram (Top Posts & Reels)
   const midiasInstagram: InstagramMidia[] = [
     {
-      id: 'med-01',
-      clienteId: 'cli-01',
-      contaId: 'conta-tn-insta',
+      id: gerarUuidDeterministico('f1000001', 1),
+      clienteId: SEED_IDS.CLIENTES.TECHNOVA,
+      contaId: SEED_IDS.CONTAS.TN_INSTA,
       idMidia: '180293817263541',
       tipo: 'REEL',
       legenda: '🚀 5 Erros que impedem seu SaaS de bater as metas de aquisição no primeiro trimestre! Veja o passo a passo completo no link da bio.',
@@ -388,9 +395,9 @@ export function inicializarStore(): DataStore {
       compartilhamentos: 75,
     },
     {
-      id: 'med-02',
-      clienteId: 'cli-01',
-      contaId: 'conta-tn-insta',
+      id: gerarUuidDeterministico('f1000001', 2),
+      clienteId: SEED_IDS.CLIENTES.TECHNOVA,
+      contaId: SEED_IDS.CONTAS.TN_INSTA,
       idMidia: '180293817263542',
       tipo: 'CAROUSEL_ALBUM',
       legenda: '📊 Case Study: Como aumentamos em 140% as conversões da TechNova utilizando testes A/B contínuos e análise preditiva.',
@@ -405,9 +412,9 @@ export function inicializarStore(): DataStore {
       compartilhamentos: 82,
     },
     {
-      id: 'med-03',
-      clienteId: 'cli-01',
-      contaId: 'conta-tn-insta',
+      id: gerarUuidDeterministico('f1000001', 3),
+      clienteId: SEED_IDS.CLIENTES.TECHNOVA,
+      contaId: SEED_IDS.CONTAS.TN_INSTA,
       idMidia: '180293817263543',
       tipo: 'IMAGE',
       legenda: '💡 Anunciar sem medir CAC e LTV é como navegar sem bússola. Salve este post para consultar depois!',
@@ -425,8 +432,8 @@ export function inicializarStore(): DataStore {
 
   const sincronizacoes: SincronizacaoLog[] = [
     {
-      id: 'sync-1',
-      contaId: 'conta-tn-ga4',
+      id: gerarUuidDeterministico('f2000001', 1),
+      contaId: SEED_IDS.CONTAS.TN_GA4,
       canal: 'ga4',
       janelaInicio: '2026-03-01',
       janelaFim: '2026-03-31',
@@ -436,8 +443,8 @@ export function inicializarStore(): DataStore {
       linhasAfetadas: 155,
     },
     {
-      id: 'sync-2',
-      contaId: 'conta-tn-gads',
+      id: gerarUuidDeterministico('f2000001', 2),
+      contaId: SEED_IDS.CONTAS.TN_GADS,
       canal: 'google_ads',
       janelaInicio: '2026-03-01',
       janelaFim: '2026-03-31',
@@ -450,8 +457,8 @@ export function inicializarStore(): DataStore {
 
   const metas: MetaCliente[] = [
     {
-      id: 'meta-tn-01',
-      clienteId: 'cli-01',
+      id: gerarUuidDeterministico('f3000001', 1),
+      clienteId: SEED_IDS.CLIENTES.TECHNOVA,
       cpaMaximo: 45.0, // R$ 45,00
       ctrMinimo: 2.0, // 2%
       roasMinimo: 3.5, // 3.5x
@@ -459,8 +466,8 @@ export function inicializarStore(): DataStore {
       conversoesMinimoMensal: 300,
     },
     {
-      id: 'meta-mu-02',
-      clienteId: 'cli-02',
+      id: gerarUuidDeterministico('f3000001', 2),
+      clienteId: SEED_IDS.CLIENTES.MODA_URBANA,
       cpaMaximo: 35.0,
       ctrMinimo: 1.5,
       roasMinimo: 4.0,
@@ -471,9 +478,9 @@ export function inicializarStore(): DataStore {
 
   const relatorios: RelatorioGerado[] = [
     {
-      id: 'rel-01',
-      clienteId: 'cli-01',
-      usuarioId: 'usr-admin',
+      id: gerarUuidDeterministico('f4000001', 1),
+      clienteId: SEED_IDS.CLIENTES.TECHNOVA,
+      usuarioId: SEED_IDS.USUARIOS.ADMIN,
       nomeArquivo: 'Relatorio_Mensal_TechNova_Fev2026.pdf',
       formato: 'pdf',
       status: 'concluido',
@@ -483,7 +490,7 @@ export function inicializarStore(): DataStore {
         canais: ['google_ads', 'meta_ads', 'ga4'],
         comparar: 'anterior',
       },
-      arquivoUrl: '/api/v1/relatorios/rel-01/download',
+      arquivoUrl: `/api/v1/relatorios/${gerarUuidDeterministico('f4000001', 1)}/download`,
       criadoEm: '2026-03-01T10:00:00Z',
       concluidoEm: '2026-03-01T10:00:15Z',
     },
@@ -491,8 +498,8 @@ export function inicializarStore(): DataStore {
 
   const agendamentos: AgendamentoRelatorio[] = [
     {
-      id: 'agd-01',
-      clienteId: 'cli-01',
+      id: gerarUuidDeterministico('f5000001', 1),
+      clienteId: SEED_IDS.CLIENTES.TECHNOVA,
       titulo: 'Envio Mensal de Fechamento de Metas',
       frequencia: 'mensal',
       diaEnvio: 1, // Todo dia 1º
@@ -505,6 +512,8 @@ export function inicializarStore(): DataStore {
       statusUltimoEnvio: 'sucesso',
     },
   ];
+
+  const auditoria: AuditoriaLog[] = [];
 
   return {
     marca,
@@ -520,6 +529,7 @@ export function inicializarStore(): DataStore {
     metas,
     relatorios,
     agendamentos,
+    auditoria,
   };
 }
 

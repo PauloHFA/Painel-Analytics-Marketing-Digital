@@ -201,6 +201,35 @@ CREATE TABLE IF NOT EXISTS auditoria (
     criado_em TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 15. Tabela: metas_clientes (Limites e Metas Contratuais - RF-16)
+CREATE TABLE IF NOT EXISTS metas_clientes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    cliente_id UUID NOT NULL UNIQUE REFERENCES clientes(id) ON DELETE CASCADE,
+    cpa_maximo NUMERIC(12, 2) NOT NULL DEFAULT 50.00,
+    ctr_minimo NUMERIC(5, 2) NOT NULL DEFAULT 1.80,
+    roas_minimo NUMERIC(8, 2) NOT NULL DEFAULT 3.00,
+    investimento_maximo_mensal NUMERIC(12, 2) NOT NULL DEFAULT 20000.00,
+    conversoes_minimo_mensal INT NOT NULL DEFAULT 400,
+    atualizado_em TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 16. Tabela: agendamentos_relatorios (Rotinas de envio - RF-15)
+CREATE TABLE IF NOT EXISTS agendamentos_relatorios (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    titulo VARCHAR(255) NOT NULL,
+    frequencia VARCHAR(20) NOT NULL CHECK (frequencia IN ('semanal', 'quinzenal', 'mensal')),
+    dia_envio INT NOT NULL CHECK (dia_envio BETWEEN 1 AND 31),
+    hora_envio VARCHAR(5) NOT NULL DEFAULT '08:00',
+    destinatarios_email TEXT[] NOT NULL DEFAULT '{}',
+    webhook_whatsapp TEXT,
+    formato VARCHAR(10) NOT NULL DEFAULT 'pdf' CHECK (formato IN ('pdf', 'csv', 'ambos')),
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    ultimo_envio TIMESTAMP WITH TIME ZONE,
+    status_ultimo_envio VARCHAR(20) CHECK (status_ultimo_envio IN ('sucesso', 'erro')),
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ====================================================================
 -- ÍNDICES DE PERFORMANCE (Seção 7 e 11: consultas de 12 meses < 1.5s)
 -- ====================================================================
@@ -223,6 +252,8 @@ ALTER TABLE instagram_midias ENABLE ROW LEVEL SECURITY;
 ALTER TABLE entradas_manuais ENABLE ROW LEVEL SECURITY;
 ALTER TABLE contas_conectadas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE relatorios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE metas_clientes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agendamentos_relatorios ENABLE ROW LEVEL SECURITY;
 
 -- 2. Políticas de segurança baseadas na variável de sessão 'app.cliente_ids'
 -- A aplicação deve executar: SET LOCAL app.cliente_ids = 'id1,id2,...';
@@ -245,6 +276,12 @@ CREATE POLICY isolamento_contas_conectadas ON contas_conectadas
     USING (cliente_id = ANY (string_to_array(current_setting('app.cliente_ids', true), ',')::uuid[]));
 
 CREATE POLICY isolamento_relatorios ON relatorios
+    USING (cliente_id = ANY (string_to_array(current_setting('app.cliente_ids', true), ',')::uuid[]));
+
+CREATE POLICY isolamento_metas_clientes ON metas_clientes
+    USING (cliente_id = ANY (string_to_array(current_setting('app.cliente_ids', true), ',')::uuid[]));
+
+CREATE POLICY isolamento_agendamentos ON agendamentos_relatorios
     USING (cliente_id = ANY (string_to_array(current_setting('app.cliente_ids', true), ',')::uuid[]));
 
 -- ====================================================================

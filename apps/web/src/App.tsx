@@ -1,29 +1,35 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useFilters } from './context/FilterContext';
 import { useAuth } from './context/AuthContext';
+import { useToast } from './context/ToastContext';
 import { fetchApi } from './services/api';
+import { resolverUsuarioToken } from './constants/ids';
 import { Header } from './components/Header';
 import { FilterBar } from './components/FilterBar';
 import { OverviewView } from './views/OverviewView';
-import { PaidAdsView } from './views/PaidAdsView';
-import { GA4View } from './views/GA4View';
-import { InstagramView } from './views/InstagramView';
-import { ManualEntriesView } from './views/ManualEntriesView';
-import { ConnectionsView } from './views/ConnectionsView';
-import { BrandSettingsView } from './views/BrandSettingsView';
-import { AlertsView } from './views/AlertsView';
-import { ReportsView } from './views/ReportsView';
-import { ReportPrintView } from './components/ReportPrintView';
 import {
+  AgenciaMarca,
+  Granularidade,
   ResumoMetricas,
   VariacaoMetrica,
   PontoSerieTemporal,
   MetricasPorCanal,
   ResumoCampanha,
+  OrigemMidiaGA4,
   InstagramMidia,
   AlertaMetrica,
 } from '@dashboard/shared';
+
+const PaidAdsView = lazy(() => import('./views/PaidAdsView').then((m) => ({ default: m.PaidAdsView })));
+const GA4View = lazy(() => import('./views/GA4View').then((m) => ({ default: m.GA4View })));
+const InstagramView = lazy(() => import('./views/InstagramView').then((m) => ({ default: m.InstagramView })));
+const ManualEntriesView = lazy(() => import('./views/ManualEntriesView').then((m) => ({ default: m.ManualEntriesView })));
+const ConnectionsView = lazy(() => import('./views/ConnectionsView').then((m) => ({ default: m.ConnectionsView })));
+const BrandSettingsView = lazy(() => import('./views/BrandSettingsView').then((m) => ({ default: m.BrandSettingsView })));
+const AlertsView = lazy(() => import('./views/AlertsView').then((m) => ({ default: m.AlertsView })));
+const ReportsView = lazy(() => import('./views/ReportsView').then((m) => ({ default: m.ReportsView })));
+const ReportPrintView = lazy(() => import('./components/ReportPrintView').then((m) => ({ default: m.ReportPrintView })));
 import {
   LayoutDashboard,
   Megaphone,
@@ -50,7 +56,9 @@ type AbaAtiva =
 export const App: React.FC = () => {
   const { clienteId, inicio, fim, canais, comparar, clienteAtual } = useFilters();
   const { usuario } = useAuth();
+  const { mostrarToast } = useToast();
   const [abaAtiva, setAbaAtiva] = useState<AbaAtiva>('visao_geral');
+  const [granularidade, setGranularidade] = useState<Granularidade>('dia');
   const [exibirRelatorioPdf, setExibirRelatorioPdf] = useState(false);
   const [minutosDesdeAtualizacao, setMinutosDesdeAtualizacao] = useState(0);
 
@@ -91,7 +99,7 @@ export const App: React.FC = () => {
   });
 
   const { data: dadosSerie } = useQuery({
-    queryKey: ['serie', clienteId, inicio, fim, canais.join(','), comparar],
+    queryKey: ['serie', clienteId, inicio, fim, canais.join(','), comparar, granularidade],
     queryFn: async () => {
       const params = new URLSearchParams({
         clienteId,
@@ -99,6 +107,7 @@ export const App: React.FC = () => {
         fim,
         canais: canais.join(','),
         comparar,
+        granularidade,
       });
       return fetchApi<{ atual: PontoSerieTemporal[]; comparativo: PontoSerieTemporal[] }>(
         `/metricas/serie?${params.toString()}`
@@ -106,19 +115,32 @@ export const App: React.FC = () => {
     },
   });
 
+  const { data: dadosMarca } = useQuery({
+    queryKey: ['agencia-marca'],
+    queryFn: async () => fetchApi<{ marca: AgenciaMarca }>('/agencia/marca'),
+  });
+
   const { data: dadosCanais } = useQuery({
-    queryKey: ['por-canal', clienteId, inicio, fim],
+    queryKey: ['por-canal', clienteId, inicio, fim, canais.join(',')],
     queryFn: async () => {
-      const params = new URLSearchParams({ clienteId, inicio, fim });
+      const params = new URLSearchParams({ clienteId, inicio, fim, canais: canais.join(',') });
       return fetchApi<{ canais: MetricasPorCanal[] }>(`/metricas/por-canal?${params.toString()}`);
     },
   });
 
   const { data: dadosCampanhas } = useQuery({
-    queryKey: ['campanhas', clienteId, inicio, fim],
+    queryKey: ['campanhas', clienteId, inicio, fim, canais.join(',')],
+    queryFn: async () => {
+      const params = new URLSearchParams({ clienteId, inicio, fim, canais: canais.join(',') });
+      return fetchApi<{ campanhas: ResumoCampanha[] }>(`/metricas/campanhas?${params.toString()}`);
+    },
+  });
+
+  const { data: dadosGa4Origens } = useQuery({
+    queryKey: ['ga4-origens', clienteId, inicio, fim],
     queryFn: async () => {
       const params = new URLSearchParams({ clienteId, inicio, fim });
-      return fetchApi<{ campanhas: ResumoCampanha[] }>(`/metricas/campanhas?${params.toString()}`);
+      return fetchApi<{ origens: OrigemMidiaGA4[] }>(`/ga4/origens?${params.toString()}`);
     },
   });
 
@@ -156,14 +178,33 @@ export const App: React.FC = () => {
       : []),
   ];
 
-  const handleExportCsv = () => {
-    const token = localStorage.getItem('auth_token') || 'usr-admin';
-    window.open(`/api/v1/metricas/exportar-csv?clienteId=${clienteId}&inicio=${inicio}&fim=${fim}&token=${token}`, '_blank');
+  const handleExportCsv = async () => {
+    try {
+      const token = resolverUsuarioToken(localStorage.getItem('auth_token'));
+      const resp = await fetch(`/api/v1/metricas/exportar-csv?clienteId=${clienteId}&inicio=${inicio}&fim=${fim}`, {
+        headers: { 'x-user-id': token },
+      });
+      if (!resp.ok) {
+        throw new Error(`Erro ${resp.status} ao exportar CSV`);
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `metricas_${clienteId}_${inicio}_${fim}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      mostrarToast(err.message || 'Falha ao exportar CSV.', 'erro');
+    }
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       <Header
+        marca={dadosMarca?.marca}
         minutosDesdeAtualizacao={minutosDesdeAtualizacao}
         onRefresh={() => {
           refetch();
@@ -211,7 +252,13 @@ export const App: React.FC = () => {
           </div>
         ) : (
           dadosResumo && (
-            <>
+            <Suspense
+              fallback={
+                <div className="py-12 text-center text-xs text-slate-400 dark:text-slate-500">
+                  Carregando módulo...
+                </div>
+              }
+            >
               {abaAtiva === 'visao_geral' && (
                 <OverviewView
                   resumoAtual={dadosResumo.resumoAtual}
@@ -220,12 +267,15 @@ export const App: React.FC = () => {
                   serieAtual={dadosSerie?.atual || []}
                   serieComparativa={dadosSerie?.comparativo}
                   canais={dadosCanais?.canais || []}
+                  marca={dadosMarca?.marca}
+                  granularidade={granularidade}
+                  onChangeGranularidade={setGranularidade}
                 />
               )}
 
               {abaAtiva === 'anuncios' && <PaidAdsView campanhas={dadosCampanhas?.campanhas || []} />}
 
-              {abaAtiva === 'ga4' && <GA4View resumo={dadosResumo.resumoAtual} />}
+              {abaAtiva === 'ga4' && <GA4View resumo={dadosResumo.resumoAtual} origens={dadosGa4Origens?.origens || []} />}
 
               {abaAtiva === 'instagram' && (
                 <InstagramView resumo={dadosResumo.resumoAtual} midias={dadosInstagram?.midias || []} />
@@ -240,22 +290,25 @@ export const App: React.FC = () => {
               {abaAtiva === 'relatorios' && <ReportsView />}
 
               {abaAtiva === 'marca' && <BrandSettingsView />}
-            </>
+            </Suspense>
           )
         )}
       </main>
 
       {/* Modal / Layout para Impressão em PDF */}
       {exibirRelatorioPdf && dadosResumo && (
-        <ReportPrintView
-          cliente={clienteAtual}
-          inicio={inicio}
-          fim={fim}
-          resumoAtual={dadosResumo.resumoAtual}
-          serieAtual={dadosSerie?.atual || []}
-          campanhas={dadosCampanhas?.campanhas || []}
-          onFechar={() => setExibirRelatorioPdf(false)}
-        />
+        <Suspense fallback={null}>
+          <ReportPrintView
+            cliente={clienteAtual}
+            marca={dadosMarca?.marca}
+            inicio={inicio}
+            fim={fim}
+            resumoAtual={dadosResumo.resumoAtual}
+            serieAtual={dadosSerie?.atual || []}
+            campanhas={dadosCampanhas?.campanhas || []}
+            onFechar={() => setExibirRelatorioPdf(false)}
+          />
+        </Suspense>
       )}
     </div>
   );

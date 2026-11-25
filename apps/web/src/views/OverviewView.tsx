@@ -9,6 +9,8 @@ import {
   Percent,
 } from 'lucide-react';
 import {
+  AgenciaMarca,
+  Granularidade,
   ResumoMetricas,
   VariacaoMetrica,
   PontoSerieTemporal,
@@ -30,6 +32,9 @@ interface Props {
   serieAtual: PontoSerieTemporal[];
   serieComparativa?: PontoSerieTemporal[];
   canais: MetricasPorCanal[];
+  marca?: AgenciaMarca;
+  granularidade: Granularidade;
+  onChangeGranularidade: (g: Granularidade) => void;
 }
 
 export const OverviewView: React.FC<Props> = ({
@@ -39,6 +44,9 @@ export const OverviewView: React.FC<Props> = ({
   serieAtual,
   serieComparativa,
   canais,
+  marca,
+  granularidade,
+  onChangeGranularidade,
 }) => {
   const { clienteId, inicio, fim, canais: canaisSelecionados } = useFilters();
   const [metricaGrafico, setMetricaGrafico] = useState<'investimento' | 'conversoes' | 'receita' | 'cliques'>(
@@ -141,28 +149,52 @@ export const OverviewView: React.FC<Props> = ({
               </p>
             </div>
 
-            {/* Alternador de Métrica do Gráfico */}
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-              {(
-                [
-                  { id: 'investimento', label: 'Investimento' },
-                  { id: 'conversoes', label: 'Conversões' },
-                  { id: 'receita', label: 'Receita' },
-                  { id: 'cliques', label: 'Cliques' },
-                ] as const
-              ).map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setMetricaGrafico(tab.id)}
-                  className={`text-xs px-2.5 py-1 rounded font-medium transition ${
-                    metricaGrafico === tab.id
-                      ? 'bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            {/* Alternador de Granularidade + Métrica do Gráfico */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                {(
+                  [
+                    { id: 'dia', label: 'Dia' },
+                    { id: 'semana', label: 'Semana' },
+                    { id: 'mes', label: 'Mês' },
+                  ] as const
+                ).map((g) => (
+                  <button
+                    key={g.id}
+                    onClick={() => onChangeGranularidade(g.id)}
+                    className={`text-xs px-2 py-1 rounded font-medium transition ${
+                      granularidade === g.id
+                        ? 'bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                    }`}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                {(
+                  [
+                    { id: 'investimento', label: 'Investimento' },
+                    { id: 'conversoes', label: 'Conversões' },
+                    { id: 'receita', label: 'Receita' },
+                    { id: 'cliques', label: 'Cliques' },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setMetricaGrafico(tab.id)}
+                    className={`text-xs px-2.5 py-1 rounded font-medium transition ${
+                      metricaGrafico === tab.id
+                        ? 'bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -170,6 +202,8 @@ export const OverviewView: React.FC<Props> = ({
             atual={serieAtual}
             comparativo={serieComparativa}
             metrica={metricaGrafico}
+            corPrimaria={marca?.corPrimaria}
+            corNeutra={marca?.corNeutra}
           />
         </div>
 

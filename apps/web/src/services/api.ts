@@ -1,7 +1,9 @@
+import { resolverUsuarioToken } from '../constants/ids';
+
 const API_BASE = '/api/v1';
 
 export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('auth_token') || 'usr-rick';
+  const token = resolverUsuarioToken(localStorage.getItem('auth_token'));
 
   const headers = {
     'Content-Type': 'application/json',

@@ -1,21 +1,22 @@
 import React from 'react';
-import { ResumoMetricas, formatarNumero, formatarPercentual } from '@dashboard/shared';
+import { ResumoMetricas, OrigemMidiaGA4, formatarNumero, formatarPercentual } from '@dashboard/shared';
 import { Globe, Users, Activity, Target, AlertCircle } from 'lucide-react';
 
 interface Props {
   resumo: ResumoMetricas;
+  origens: OrigemMidiaGA4[];
 }
 
-export const GA4View: React.FC<Props> = ({ resumo }) => {
-  const taxaConversaoSessoes = resumo.sessoesGA4 > 0 ? (resumo.conversoesTotal / resumo.sessoesGA4) * 100 : 0;
+const rotulosOrigem: Record<string, string> = {
+  'google / cpc': 'Google Ads (Pago)',
+  'facebook / paid': 'Meta Ads (Pago)',
+  'instagram / organic': 'Instagram Orgânico',
+  'direct / none': 'Tráfego Direto',
+  'google / organic': 'Busca Orgânica (SEO)',
+};
 
-  const canaisOrigem = [
-    { origem: 'google / cpc', rotulo: 'Google Ads (Pago)', sessoes: Math.round(resumo.sessoesGA4 * 0.38), pct: 38 },
-    { origem: 'facebook / paid', rotulo: 'Meta Ads (Pago)', sessoes: Math.round(resumo.sessoesGA4 * 0.28), pct: 28 },
-    { origem: 'instagram / organic', rotulo: 'Instagram Orgânico', sessoes: Math.round(resumo.sessoesGA4 * 0.14), pct: 14 },
-    { origem: 'direct / none', rotulo: 'Tráfego Direto', sessoes: Math.round(resumo.sessoesGA4 * 0.12), pct: 12 },
-    { origem: 'google / organic', rotulo: 'Busca Orgânica (SEO)', sessoes: Math.round(resumo.sessoesGA4 * 0.08), pct: 8 },
-  ];
+export const GA4View: React.FC<Props> = ({ resumo, origens }) => {
+  const taxaConversaoSessoes = resumo.sessoesGA4 > 0 ? (resumo.conversoesTotal / resumo.sessoesGA4) * 100 : 0;
 
   return (
     <div className="space-y-6">
@@ -74,22 +75,30 @@ export const GA4View: React.FC<Props> = ({ resumo }) => {
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Volume de sessões segmentado pelas principais fontes</p>
 
         <div className="space-y-3">
-          {canaisOrigem.map((ch) => (
-            <div key={ch.origem} className="space-y-1">
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-semibold text-slate-800 dark:text-slate-200">{ch.rotulo}</span>
-                <span className="text-slate-600 dark:text-slate-400 font-medium">
-                  {formatarNumero(ch.sessoes)} sessões ({ch.pct}%)
-                </span>
+          {origens.length === 0 ? (
+            <p className="text-xs text-slate-400 dark:text-slate-500 py-4 text-center">
+              Nenhum dado de origem / mídia encontrado no período selecionado.
+            </p>
+          ) : (
+            origens.map((ch) => (
+              <div key={ch.origemMidia} className="space-y-1">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">
+                    {rotulosOrigem[ch.origemMidia] || ch.origemMidia}
+                  </span>
+                  <span className="text-slate-600 dark:text-slate-400 font-medium">
+                    {formatarNumero(ch.sessoes)} sessões ({ch.percentualSessoes}%)
+                  </span>
+                </div>
+                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-amber-500 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${ch.percentualSessoes}%` }}
+                  ></div>
+                </div>
               </div>
-              <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-amber-500 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${ch.pct}%` }}
-                ></div>
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>

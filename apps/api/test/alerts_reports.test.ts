@@ -3,16 +3,17 @@ import assert from 'node:assert/strict';
 import { avaliarAlertasCliente } from '../src/services/alertService';
 import { gerarCsvMetricas } from '../src/services/csvExportService';
 import { store } from '../src/db/store';
+import { SEED_IDS } from '../src/db/ids';
 
 test('Módulo de Alertas Inteligentes e Metas (RF-16 do PDF)', async (t) => {
-  await t.test('deve identificar alerta crítico de conexão requerendo reconexão (cli-02)', () => {
-    // Moda Urbana (cli-02) possui conta com status 'requer_reconexao'
+  await t.test('deve identificar alerta crítico de conexão requerendo reconexão (Moda Urbana)', () => {
+    // Moda Urbana possui conta com status 'requer_reconexao'
     const hoje = new Date().toISOString().slice(0, 10);
     const dInicio = new Date();
     dInicio.setDate(dInicio.getDate() - 30);
     const inicio = dInicio.toISOString().slice(0, 10);
 
-    const alertas = avaliarAlertasCliente('cli-02', inicio, hoje);
+    const alertas = avaliarAlertasCliente(SEED_IDS.CLIENTES.MODA_URBANA, inicio, hoje);
     const alertaConexao = alertas.find((a) => a.tipo === 'conexao');
 
     assert.ok(alertaConexao, 'Deve detectar conta que requer reconexão');
@@ -27,12 +28,12 @@ test('Módulo de Alertas Inteligentes e Metas (RF-16 do PDF)', async (t) => {
     const inicio = dInicio.toISOString().slice(0, 10);
 
     // Forçar meta com teto muito baixo de R$ 5,00 para disparar alerta
-    const metaExistente = store.metas.find((m) => m.clienteId === 'cli-01');
+    const metaExistente = store.metas.find((m) => m.clienteId === SEED_IDS.CLIENTES.TECHNOVA);
     assert.ok(metaExistente);
     const cpaOriginal = metaExistente.cpaMaximo;
     metaExistente.cpaMaximo = 5.0; // teto irreal
 
-    const alertas = avaliarAlertasCliente('cli-01', inicio, hoje);
+    const alertas = avaliarAlertasCliente(SEED_IDS.CLIENTES.TECHNOVA, inicio, hoje);
     const alertaCpa = alertas.find((a) => a.tipo === 'cpa');
 
     assert.ok(alertaCpa, 'Deve disparar alerta de CPA estourado');
@@ -50,7 +51,7 @@ test('Exportação de Métricas em CSV (RF-17 do PDF)', async (t) => {
     dInicio.setDate(dInicio.getDate() - 30);
     const inicio = dInicio.toISOString().slice(0, 10);
 
-    const csv = gerarCsvMetricas('cli-01', inicio, hoje);
+    const csv = gerarCsvMetricas(SEED_IDS.CLIENTES.TECHNOVA, inicio, hoje);
 
     assert.ok(csv.startsWith('\uFEFF'), 'Deve conter BOM UTF-8 para o Excel');
     assert.match(csv, /Data;Canal;Campanha;Investimento/);

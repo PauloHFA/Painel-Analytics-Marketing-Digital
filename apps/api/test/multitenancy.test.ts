@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isolamentoClienteMiddleware } from '../src/middleware/auth';
+import { authMiddleware, isolamentoClienteMiddleware, usuarioTemAcessoAoCliente } from '../src/middleware/auth';
 import { store } from '../src/db/store';
+import { SEED_IDS, gerarUuidCliente } from '../src/db/ids';
 
 test('Isolamento Multi-tenant e Defesa em Camadas (Seção 9.2 e 14 do PDF)', async (t) => {
-  await t.test('Cliente A (usr-cliente-01) DEVE ter acesso bloqueado (403) ao tentar consultar dados do Cliente B (cli-02)', () => {
-    const usuarioClienteA = store.usuarios.find((u) => u.id === 'usr-cliente-01');
+  await t.test('Cliente A (usr-cliente-01) DEVE ter acesso bloqueado (403) ao tentar consultar dados do Cliente B (Moda Urbana)', () => {
+    const usuarioClienteA = store.usuarios.find((u) => u.id === SEED_IDS.USUARIOS.CLIENTE_01);
     assert.ok(usuarioClienteA);
 
     let statusRetornado = 0;
@@ -13,7 +14,7 @@ test('Isolamento Multi-tenant e Defesa em Camadas (Seção 9.2 e 14 do PDF)', as
 
     const reqMock: any = {
       usuario: usuarioClienteA,
-      query: { clienteId: 'cli-02' }, // Tentativa de IDOR acessando outro cliente
+      query: { clienteId: SEED_IDS.CLIENTES.MODA_URBANA }, // Tentativa de IDOR acessando outro cliente
       params: {},
       body: {},
     };
@@ -41,13 +42,13 @@ test('Isolamento Multi-tenant e Defesa em Camadas (Seção 9.2 e 14 do PDF)', as
     assert.match(jsonRetornado.detail, /Violação de isolamento/);
   });
 
-  await t.test('Cliente A (usr-cliente-01) deve ter acesso permitido (200) aos seus próprios dados (cli-01)', () => {
-    const usuarioClienteA = store.usuarios.find((u) => u.id === 'usr-cliente-01');
+  await t.test('Cliente A deve ter acesso permitido (200) aos seus próprios dados (TechNova)', () => {
+    const usuarioClienteA = store.usuarios.find((u) => u.id === SEED_IDS.USUARIOS.CLIENTE_01);
     assert.ok(usuarioClienteA);
 
     const reqMock: any = {
       usuario: usuarioClienteA,
-      query: { clienteId: 'cli-01' },
+      query: { clienteId: SEED_IDS.CLIENTES.TECHNOVA },
       params: {},
       body: {},
     };
@@ -61,16 +62,17 @@ test('Isolamento Multi-tenant e Defesa em Camadas (Seção 9.2 e 14 do PDF)', as
     isolamentoClienteMiddleware(reqMock, resMock, nextMock);
 
     assert.equal(nextChamado, true);
-    assert.equal(reqMock.clienteIdPermitido, 'cli-01');
+    assert.equal(reqMock.clienteIdPermitido, SEED_IDS.CLIENTES.TECHNOVA);
   });
 
-  await t.test('Admin da Agência (usr-admin) pode alternar e auditar qualquer cliente da carteira de 60 clientes', () => {
-    const admin = store.usuarios.find((u) => u.id === 'usr-admin');
+  await t.test('Admin da Agência pode alternar e auditar qualquer cliente da carteira de 60 clientes', () => {
+    const admin = store.usuarios.find((u) => u.id === SEED_IDS.USUARIOS.ADMIN);
     assert.ok(admin);
 
+    const cliente45 = gerarUuidCliente(45);
     const reqMock: any = {
       usuario: admin,
-      query: { clienteId: 'cli-45' }, // Acessa cliente 45 da carteira
+      query: { clienteId: cliente45 }, // Acessa cliente 45 da carteira
       params: {},
       body: {},
     };
@@ -81,17 +83,17 @@ test('Isolamento Multi-tenant e Defesa em Camadas (Seção 9.2 e 14 do PDF)', as
     });
 
     assert.equal(nextChamado, true);
-    assert.equal(reqMock.clienteIdPermitido, 'cli-45');
+    assert.equal(reqMock.clienteIdPermitido, cliente45);
   });
 
   await t.test('Gestor de Contas tem acesso limitado aos clientes sob sua gestão', () => {
-    const gestor = store.usuarios.find((u) => u.id === 'usr-gestor');
+    const gestor = store.usuarios.find((u) => u.id === SEED_IDS.USUARIOS.GESTOR);
     assert.ok(gestor);
 
-    // Cliente atribuído ao gestor (cli-02)
+    // Cliente atribuído ao gestor
     const reqPermitido: any = {
       usuario: gestor,
-      query: { clienteId: 'cli-02' },
+      query: { clienteId: SEED_IDS.CLIENTES.MODA_URBANA },
       params: {},
       body: {},
     };
@@ -102,11 +104,11 @@ test('Isolamento Multi-tenant e Defesa em Camadas (Seção 9.2 e 14 do PDF)', as
     });
     assert.equal(permitidoChamado, true);
 
-    // Cliente não atribuído (cli-50)
+    // Cliente não atribuído (cliente 50)
     let statusBloqueado = 0;
     const reqBloqueado: any = {
       usuario: gestor,
-      query: { clienteId: 'cli-50' },
+      query: { clienteId: gerarUuidCliente(50) },
       params: {},
       body: {},
     };
@@ -119,6 +121,20 @@ test('Isolamento Multi-tenant e Defesa em Camadas (Seção 9.2 e 14 do PDF)', as
 
     isolamentoClienteMiddleware(reqBloqueado, resMock, () => {});
     assert.equal(statusBloqueado, 403);
+  });
+
+  await t.test('usuarioTemAcessoAoCliente bloqueia gestor em cliente fora da sua carteira e authMiddleware aceita query token', () => {
+    const gestor = store.usuarios.find((u) => u.id === SEED_IDS.USUARIOS.GESTOR)!;
+    assert.equal(usuarioTemAcessoAoCliente(gestor, SEED_IDS.CLIENTES.TECHNOVA), true);
+    assert.equal(usuarioTemAcessoAoCliente(gestor, gerarUuidCliente(50)), false);
+
+    const reqCsv: any = { headers: {}, query: { token: SEED_IDS.USUARIOS.CLIENTE_01 } };
+    let nextOk = false;
+    authMiddleware(reqCsv, {} as any, () => {
+      nextOk = true;
+    });
+    assert.equal(nextOk, true);
+    assert.equal(reqCsv.usuario?.id, SEED_IDS.USUARIOS.CLIENTE_01);
   });
 });
 

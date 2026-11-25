@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  AgenciaMarca,
   ResumoMetricas,
   PontoSerieTemporal,
   ResumoCampanha,
@@ -11,6 +12,7 @@ import { TrendChart } from './charts/TrendChart';
 
 interface Props {
   cliente?: Cliente;
+  marca?: AgenciaMarca;
   inicio: string;
   fim: string;
   resumoAtual: ResumoMetricas;
@@ -21,6 +23,7 @@ interface Props {
 
 export const ReportPrintView: React.FC<Props> = ({
   cliente,
+  marca,
   inicio,
   fim,
   resumoAtual,
@@ -28,9 +31,17 @@ export const ReportPrintView: React.FC<Props> = ({
   campanhas,
   onFechar,
 }) => {
+  const corPrimaria = marca?.corPrimaria || '#2563eb';
+  const nomeAgencia = marca?.nome || 'GrowMetrics Digital';
+  const rodapeTexto =
+    marca?.rodapeTexto || `Relatório confidencial emitido pela ${nomeAgencia} para ${cliente?.nome || 'Cliente'}.`;
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 z-50 flex justify-center overflow-y-auto p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full p-8 text-slate-900 space-y-6 my-auto print:m-0 print:p-0 print:shadow-none print:max-w-none">
+      <div
+        className="bg-white rounded-xl shadow-2xl max-w-4xl w-full p-8 text-slate-900 space-y-6 my-auto print:m-0 print:p-0 print:shadow-none print:max-w-none"
+        style={{ fontFamily: marca?.fonte || undefined }}
+      >
         {/* Barra de Ação (Apenas na tela, oculta na impressão) */}
         <div className="flex items-center justify-between border-b pb-4 no-print">
           <div>
@@ -54,15 +65,22 @@ export const ReportPrintView: React.FC<Props> = ({
         </div>
 
         {/* Cabeçalho do Relatório com Identidade Visual */}
-        <div className="border-b-2 border-blue-600 pb-4 flex justify-between items-end">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-bold text-xl text-blue-600 tracking-tight">GrowMetrics Digital</span>
-              <span className="text-xs text-slate-400">|</span>
-              <span className="text-xs font-medium text-slate-600">Analytics & Performance</span>
+        <div className="border-b-2 pb-4 flex justify-between items-end" style={{ borderColor: corPrimaria }}>
+          <div className="flex items-start gap-3">
+            {marca?.logoUrl && (
+              <img src={marca.logoUrl} alt={nomeAgencia} className="w-12 h-12 rounded-lg object-cover border border-slate-200" />
+            )}
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-bold text-xl tracking-tight" style={{ color: corPrimaria }}>
+                  {nomeAgencia}
+                </span>
+                <span className="text-xs text-slate-400">|</span>
+                <span className="text-xs font-medium text-slate-600">Analytics & Performance</span>
+              </div>
+              <h1 className="text-2xl font-black text-slate-900">Relatório Executivo de Resultados</h1>
+              <p className="text-sm font-semibold text-slate-700 mt-1">Cliente: {cliente?.nome}</p>
             </div>
-            <h1 className="text-2xl font-black text-slate-900">Relatório Executivo de Resultados</h1>
-            <p className="text-sm font-semibold text-slate-700 mt-1">Cliente: {cliente?.nome}</p>
           </div>
           <div className="text-right text-xs text-slate-500">
             <p>
@@ -129,8 +147,8 @@ export const ReportPrintView: React.FC<Props> = ({
 
         {/* Rodapé Oficial da Agência (RF-06 e Seção 12) */}
         <div className="border-t border-slate-200 pt-4 flex justify-between items-center text-[10px] text-slate-400 page-break-avoid">
-          <span>Relatório confidencial emitido pela GrowMetrics Digital para {cliente?.nome}.</span>
-          <span>Página 1 de 1</span>
+          <span>{rodapeTexto}</span>
+          <span>Cliente: {cliente?.nome}</span>
         </div>
       </div>
     </div>

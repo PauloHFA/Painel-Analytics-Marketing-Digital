@@ -1,35 +1,60 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import {
   LoginSchema,
   FiltroMetricasSchema,
   EntradaManualSchema,
   AgenciaMarcaSchema,
+  CriarClienteSchema,
+  AtualizarClienteSchema,
   MetaClienteSchema,
   CriarRelatorioSchema,
   AgendamentoRelatorioSchema,
+  WebhookCrmSchema,
+  Cliente,
   RelatorioGerado,
   AgendamentoRelatorio,
 } from '@dashboard/shared';
+import { env } from './config/env';
 import { store } from './db/store';
-import { authMiddleware, isolamentoClienteMiddleware } from './middleware/auth';
+import { novoUuid } from './db/ids';
+import { authMiddleware, isolamentoClienteMiddleware, usuarioTemAcessoAoCliente } from './middleware/auth';
 import {
   obterResumoComComparativo,
   gerarSerieTemporal,
   obterMetricasPorCanal,
   obterCampanhas,
+  obterOrigensGA4,
 } from './services/metricsService';
 import { obterConector } from './connectors';
 import { avaliarAlertasCliente } from './services/alertService';
 import { gerarCsvMetricas } from './services/csvExportService';
 import { gerarParecerIa } from './services/aiCopilotService';
 import { calcularBudgetPacing } from './services/pacingService';
+import { registrarAuditoria } from './services/auditService';
 
-const app = express();
-const PORT = process.env.PORT || 3001;
+export const app = express();
+const PORT = env.PORT;
 
-app.use(cors());
+app.use(helmet());
+app.use(
+  cors({
+    origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN.split(',').map((o) => o.trim()),
+    credentials: true,
+  })
+);
 app.use(express.json());
+app.use(
+  '/api/',
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
 
 // Endpoints de Saúde (Seção 10 do PDF)
 app.get('/health', (req, res) => {
@@ -116,6 +141,119 @@ app.get('/api/v1/clientes/:id', authMiddleware, (req, res) => {
   res.json({ cliente });
 });
 
+app.post('/api/v1/clientes', authMiddleware, (req, res) => {
+  const usuario = req.usuario!;
+  if (usuario.perfil !== 'admin') {
+    return res.status(403).json({ status: 403, detail: 'Apenas administradores podem cadastrar clientes.' });
+  }
+
+  const parsed = CriarClienteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(422).json({ status: 422, errors: parsed.error.errors });
+  }
+
+  const novoCliente: Cliente = {
+    id: novoUuid(),
+    ...parsed.data,
+    ativo: true,
+    criadoEm: new Date().toISOString(),
+  };
+
+  store.clientes.push(novoCliente);
+  store.usuarios.forEach((u) => {
+    if (u.perfil === 'admin' && !u.clientesIds.includes(novoCliente.id)) {
+      u.clientesIds.push(novoCliente.id);
+    }
+  });
+
+  registrarAuditoria({
+    usuarioId: usuario.id,
+    acao: 'criacao_cliente',
+    entidade: 'cliente',
+    entidadeId: novoCliente.id,
+    detalhes: { nome: novoCliente.nome },
+    ip: req.ip,
+  });
+
+  res.status(201).json({ cliente: novoCliente });
+});
+
+app.patch('/api/v1/clientes/:id', authMiddleware, (req, res) => {
+  const usuario = req.usuario!;
+  if (usuario.perfil !== 'admin') {
+    return res.status(403).json({ status: 403, detail: 'Apenas administradores podem atualizar clientes.' });
+  }
+
+  const cliente = store.clientes.find((c) => c.id === req.params.id);
+  if (!cliente) {
+    return res.status(404).json({ status: 404, detail: 'Cliente não encontrado.' });
+  }
+
+  const parsed = AtualizarClienteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(422).json({ status: 422, errors: parsed.error.errors });
+  }
+
+  Object.assign(cliente, parsed.data);
+  registrarAuditoria({
+    usuarioId: usuario.id,
+    acao: 'atualizacao_cliente',
+    entidade: 'cliente',
+    entidadeId: cliente.id,
+    detalhes: parsed.data,
+    ip: req.ip,
+  });
+
+  res.json({ cliente });
+});
+
+// LGPD: Revogação de conexões e exclusão de dados de cliente encerrado (Seção 9.3 / RNF-09)
+app.delete('/api/v1/clientes/:id/dados', authMiddleware, (req, res) => {
+  const usuario = req.usuario!;
+  if (usuario.perfil !== 'admin') {
+    return res.status(403).json({ status: 403, detail: 'Apenas administradores podem executar exclusão LGPD.' });
+  }
+
+  const clienteId = req.params.id;
+  const cliente = store.clientes.find((c) => c.id === clienteId);
+  if (!cliente) {
+    return res.status(404).json({ status: 404, detail: 'Cliente não encontrado.' });
+  }
+
+  cliente.ativo = false;
+  store.contas = store.contas.filter((c) => c.clienteId !== clienteId);
+  store.fatosAds = store.fatosAds.filter((f) => f.clienteId !== clienteId);
+  store.fatosGA4 = store.fatosGA4.filter((f) => f.clienteId !== clienteId);
+  store.fatosInstagram = store.fatosInstagram.filter((f) => f.clienteId !== clienteId);
+  store.midiasInstagram = store.midiasInstagram.filter((m) => m.clienteId !== clienteId);
+  store.entradasManuais = store.entradasManuais.filter((e) => e.clienteId !== clienteId);
+  store.metas = store.metas.filter((m) => m.clienteId !== clienteId);
+  store.relatorios = store.relatorios.filter((r) => r.clienteId !== clienteId);
+  store.agendamentos = store.agendamentos.filter((a) => a.clienteId !== clienteId);
+
+  registrarAuditoria({
+    usuarioId: usuario.id,
+    acao: 'exclusao_dados_lgpd',
+    entidade: 'cliente',
+    entidadeId: clienteId,
+    detalhes: { clienteNome: cliente.nome },
+    ip: req.ip,
+  });
+
+  res.json({
+    mensagem: 'Dados agregados removidos e conexões revogadas em conformidade com a LGPD.',
+    clienteId,
+  });
+});
+
+// Auditoria (Admin)
+app.get('/api/v1/auditoria', authMiddleware, (req, res) => {
+  if (req.usuario?.perfil !== 'admin') {
+    return res.status(403).json({ status: 403, detail: 'Apenas administradores podem consultar a trilha de auditoria.' });
+  }
+  res.json({ registros: store.auditoria, total: store.auditoria.length });
+});
+
 // Usuários
 app.get('/api/v1/usuarios', authMiddleware, (req, res) => {
   if (req.usuario?.perfil !== 'admin') {
@@ -167,7 +305,7 @@ app.post('/api/v1/conexoes/:id/sincronizar', authMiddleware, async (req, res) =>
     conta.minutosDesdeSincronizacao = 0;
 
     store.sincronizacoes.unshift({
-      id: `sync-${Date.now()}`,
+      id: novoUuid(),
       contaId: conta.id,
       canal: conta.canal,
       janelaInicio: '2026-03-01',
@@ -223,7 +361,7 @@ app.get('/api/v1/metricas/serie', authMiddleware, isolamentoClienteMiddleware, (
     return res.status(422).json({ status: 422, errors: parsed.error.errors });
   }
 
-  const { clienteId, inicio, fim, canais, comparar } = parsed.data;
+  const { clienteId, inicio, fim, canais, comparar, granularidade } = parsed.data;
   const canaisArray = canais ? canais.split(',') : undefined;
 
   const series = gerarSerieTemporal({
@@ -232,6 +370,7 @@ app.get('/api/v1/metricas/serie', authMiddleware, isolamentoClienteMiddleware, (
     fim,
     canais: canaisArray,
     comparar,
+    granularidade,
   });
 
   res.json(series);
@@ -248,9 +387,10 @@ app.get('/api/v1/metricas/por-canal', authMiddleware, isolamentoClienteMiddlewar
     return res.status(422).json({ status: 422, errors: parsed.error.errors });
   }
 
-  const { clienteId, inicio, fim } = parsed.data;
-  const canais = obterMetricasPorCanal({ clienteId, inicio, fim });
-  res.json({ canais });
+  const { clienteId, inicio, fim, canais } = parsed.data;
+  const canaisArray = canais ? canais.split(',') : undefined;
+  const resultado = obterMetricasPorCanal({ clienteId, inicio, fim, canais: canaisArray });
+  res.json({ canais: resultado });
 });
 
 app.get('/api/v1/metricas/campanhas', authMiddleware, isolamentoClienteMiddleware, (req, res) => {
@@ -264,9 +404,27 @@ app.get('/api/v1/metricas/campanhas', authMiddleware, isolamentoClienteMiddlewar
     return res.status(422).json({ status: 422, errors: parsed.error.errors });
   }
 
-  const { clienteId, inicio, fim } = parsed.data;
-  const campanhas = obterCampanhas({ clienteId, inicio, fim });
+  const { clienteId, inicio, fim, canais } = parsed.data;
+  const canaisArray = canais ? canais.split(',') : undefined;
+  const campanhas = obterCampanhas({ clienteId, inicio, fim, canais: canaisArray });
   res.json({ campanhas });
+});
+
+// GA4 Origem / Mídia
+app.get('/api/v1/ga4/origens', authMiddleware, isolamentoClienteMiddleware, (req, res) => {
+  const query = {
+    ...req.query,
+    clienteId: req.clienteIdPermitido,
+  };
+
+  const parsed = FiltroMetricasSchema.safeParse(query);
+  if (!parsed.success) {
+    return res.status(422).json({ status: 422, errors: parsed.error.errors });
+  }
+
+  const { clienteId, inicio, fim } = parsed.data;
+  const origens = obterOrigensGA4(clienteId, inicio, fim);
+  res.json({ origens });
 });
 
 // Instagram Mídias
@@ -296,6 +454,9 @@ app.post('/api/v1/clientes/:id/entradas', authMiddleware, (req, res) => {
   if (usuario.perfil === 'cliente') {
     return res.status(403).json({ status: 403, detail: 'Clientes não podem adicionar entradas manuais diretamente.' });
   }
+  if (!usuarioTemAcessoAoCliente(usuario, clienteId)) {
+    return res.status(403).json({ status: 403, detail: 'Você não tem permissão para editar dados deste cliente.' });
+  }
 
   const parsed = EntradaManualSchema.safeParse({ ...req.body, clienteId });
   if (!parsed.success) {
@@ -303,16 +464,29 @@ app.post('/api/v1/clientes/:id/entradas', authMiddleware, (req, res) => {
   }
 
   const novaEntrada = {
-    id: `em-${Date.now()}`,
+    id: novoUuid(),
     ...parsed.data,
   };
 
   store.entradasManuais.push(novaEntrada);
+  registrarAuditoria({
+    usuarioId: usuario.id,
+    acao: 'criacao_entrada_manual',
+    entidade: 'entrada_manual',
+    entidadeId: novaEntrada.id,
+    detalhes: { clienteId, receita: novaEntrada.receita, novosClientes: novaEntrada.novosClientes },
+    ip: req.ip,
+  });
   res.status(201).json({ entrada: novaEntrada });
 });
 
 // Webhook Nativo de CRM / E-commerce (RD Station, HubSpot, PipeRun - RF-12 / Seção 4.2)
 app.post('/api/v1/webhooks/crm/:clienteId', (req, res) => {
+  const secretConfigurado = env.WEBHOOK_CRM_SECRET;
+  if (secretConfigurado && req.headers['x-webhook-secret'] !== secretConfigurado) {
+    return res.status(401).json({ status: 401, detail: 'Assinatura de webhook inválida.' });
+  }
+
   const clienteId = req.params.clienteId;
   const cliente = store.clientes.find((c) => c.id === clienteId);
 
@@ -320,35 +494,45 @@ app.post('/api/v1/webhooks/crm/:clienteId', (req, res) => {
     return res.status(404).json({ status: 404, detail: 'Cliente não encontrado para este webhook.' });
   }
 
-  const { receita, novosClientes, custosExtras, evento, contato, observacao } = req.body;
-  const dataHoje = new Date().toISOString().slice(0, 10);
+  const parsed = WebhookCrmSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(422).json({ status: 422, errors: parsed.error.errors });
+  }
 
-  const valorReceita = Number(receita) || 0;
-  const qtdNovosClientes = Number(novosClientes) !== undefined ? Number(novosClientes) : 1;
-  const valorCustos = Number(custosExtras) || 0;
+  const { receita, novosClientes, custosExtras, evento, contato, observacao } = parsed.data;
+  const dataHoje = new Date().toISOString().slice(0, 10);
 
   // Encontra ou cria entrada manual para hoje
   let entradaHoje = store.entradasManuais.find((e) => e.clienteId === clienteId && e.data === dataHoje);
 
   if (entradaHoje) {
-    entradaHoje.receita += valorReceita;
-    entradaHoje.novosClientes += qtdNovosClientes;
-    entradaHoje.custosExtras += valorCustos;
+    entradaHoje.receita += receita;
+    entradaHoje.novosClientes += novosClientes;
+    entradaHoje.custosExtras += custosExtras;
     if (contato?.nome) {
       entradaHoje.observacao = `${entradaHoje.observacao || ''}; Venda: ${contato.nome}`;
     }
   } else {
     entradaHoje = {
-      id: `em-webhook-${Date.now()}`,
+      id: novoUuid(),
       clienteId,
       data: dataHoje,
-      receita: valorReceita,
-      novosClientes: qtdNovosClientes,
-      custosExtras: valorCustos,
+      receita,
+      novosClientes,
+      custosExtras,
       observacao: observacao || `Webhook ${evento || 'CRM'}: ${contato?.nome || 'Novo Cliente Integrado'}`,
     };
     store.entradasManuais.push(entradaHoje);
   }
+
+  registrarAuditoria({
+    usuarioId: null,
+    acao: 'webhook_crm',
+    entidade: 'entrada_manual',
+    entidadeId: entradaHoje.id,
+    detalhes: { clienteId, evento, receita, novosClientes },
+    ip: req.ip,
+  });
 
   res.status(200).json({
     sucesso: true,
@@ -364,6 +548,14 @@ app.get('/api/v1/metricas/exportar-csv', authMiddleware, isolamentoClienteMiddle
   const fim = (req.query.fim as string) || new Date().toISOString().slice(0, 10);
 
   const csv = gerarCsvMetricas(clienteId, inicio, fim);
+  registrarAuditoria({
+    usuarioId: req.usuario?.id || null,
+    acao: 'exportacao_csv',
+    entidade: 'metricas',
+    entidadeId: clienteId,
+    detalhes: { inicio, fim },
+    ip: req.ip,
+  });
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="metricas_${clienteId}_${inicio}_${fim}.csv"`);
@@ -380,7 +572,7 @@ app.get('/api/v1/clientes/:id/metas', authMiddleware, (req, res) => {
   }
 
   const meta = store.metas.find((m) => m.clienteId === clienteId) || {
-    id: `meta-${clienteId}`,
+    id: novoUuid(),
     clienteId,
     cpaMaximo: 50.0,
     ctrMinimo: 1.8,
@@ -399,6 +591,9 @@ app.put('/api/v1/clientes/:id/metas', authMiddleware, (req, res) => {
   if (usuario.perfil === 'cliente') {
     return res.status(403).json({ status: 403, detail: 'Clientes não possuem permissão para redefinir metas contratuais.' });
   }
+  if (!usuarioTemAcessoAoCliente(usuario, clienteId)) {
+    return res.status(403).json({ status: 403, detail: 'Você não tem permissão para alterar metas deste cliente.' });
+  }
 
   const parsed = MetaClienteSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -409,9 +604,18 @@ app.put('/api/v1/clientes/:id/metas', authMiddleware, (req, res) => {
   if (meta) {
     Object.assign(meta, parsed.data);
   } else {
-    meta = { id: `meta-${clienteId}`, clienteId, ...parsed.data };
+    meta = { id: novoUuid(), clienteId, ...parsed.data };
     store.metas.push(meta);
   }
+
+  registrarAuditoria({
+    usuarioId: usuario.id,
+    acao: 'atualizacao_metas',
+    entidade: 'meta_cliente',
+    entidadeId: meta.id,
+    detalhes: { clienteId, ...parsed.data },
+    ip: req.ip,
+  });
 
   res.json({ meta });
 });
@@ -450,7 +654,7 @@ app.post('/api/v1/relatorios', authMiddleware, (req, res) => {
     return res.status(403).json({ status: 403, detail: 'Acesso negado para gerar relatórios para este cliente.' });
   }
 
-  const novoRelatorioId = `rel-${Date.now()}`;
+  const novoRelatorioId = novoUuid();
   const novoRelatorio: RelatorioGerado = {
     id: novoRelatorioId,
     clienteId,
@@ -463,6 +667,14 @@ app.post('/api/v1/relatorios', authMiddleware, (req, res) => {
   };
 
   store.relatorios.unshift(novoRelatorio);
+  registrarAuditoria({
+    usuarioId: usuario.id,
+    acao: 'geracao_relatorio',
+    entidade: 'relatorio',
+    entidadeId: novoRelatorioId,
+    detalhes: { clienteId, formato, inicio, fim },
+    ip: req.ip,
+  });
 
   // Simulação de fila assíncrona (BullMQ/Playwright conforme Seção 12)
   setTimeout(() => {
@@ -547,6 +759,9 @@ app.post('/api/v1/clientes/:id/agendamentos', authMiddleware, (req, res) => {
   if (usuario.perfil === 'cliente') {
     return res.status(403).json({ status: 403, detail: 'Apenas membros da agência podem configurar agendamentos.' });
   }
+  if (!usuarioTemAcessoAoCliente(usuario, clienteId)) {
+    return res.status(403).json({ status: 403, detail: 'Você não tem permissão para configurar agendamentos deste cliente.' });
+  }
 
   const parsed = AgendamentoRelatorioSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -554,13 +769,21 @@ app.post('/api/v1/clientes/:id/agendamentos', authMiddleware, (req, res) => {
   }
 
   const novoAgendamento: AgendamentoRelatorio = {
-    id: `agd-${Date.now()}`,
+    id: novoUuid(),
     clienteId,
     ...parsed.data,
     webhookWhatsapp: parsed.data.webhookWhatsapp || undefined,
   };
 
   store.agendamentos.push(novoAgendamento);
+  registrarAuditoria({
+    usuarioId: usuario.id,
+    acao: 'criacao_agendamento',
+    entidade: 'agendamento',
+    entidadeId: novoAgendamento.id,
+    detalhes: { clienteId, titulo: novoAgendamento.titulo },
+    ip: req.ip,
+  });
   res.status(201).json({ agendamento: novoAgendamento });
 });
 
@@ -584,6 +807,11 @@ app.post('/api/v1/agendamentos/:id/testar', authMiddleware, (req, res) => {
   const agendamento = store.agendamentos.find((a) => a.id === req.params.id);
   if (!agendamento) {
     return res.status(404).json({ status: 404, detail: 'Agendamento não encontrado.' });
+  }
+
+  const usuario = req.usuario!;
+  if (usuario.perfil === 'cliente' || !usuarioTemAcessoAoCliente(usuario, agendamento.clienteId)) {
+    return res.status(403).json({ status: 403, detail: 'Acesso negado para disparar este agendamento.' });
   }
 
   agendamento.ultimoEnvio = new Date().toISOString();
@@ -640,10 +868,20 @@ app.put('/api/v1/agencia/marca', authMiddleware, (req, res) => {
   }
 
   store.marca = { ...store.marca, ...parsed.data };
+  registrarAuditoria({
+    usuarioId: req.usuario.id,
+    acao: 'alteracao_marca',
+    entidade: 'agencia',
+    entidadeId: store.marca.id,
+    detalhes: { nome: store.marca.nome, corPrimaria: store.marca.corPrimaria },
+    ip: req.ip,
+  });
   res.json({ marca: store.marca });
 });
 
-app.listen(PORT, () => {
-  console.log(`[API] Servidor rodando na porta ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`[API] Servidor rodando na porta ${PORT}`);
+  });
+}
 

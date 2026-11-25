@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { Usuario } from '@dashboard/shared';
 import { store } from '../db/store';
+import { SEED_IDS } from '../db/ids';
 
 // Extensão do tipo Request do Express para anexar o usuário autenticado
 declare global {
@@ -12,16 +13,23 @@ declare global {
   }
 }
 
+export function usuarioTemAcessoAoCliente(usuario: Usuario, clienteId: string): boolean {
+  if (usuario.perfil === 'admin') return true;
+  return usuario.clientesIds.includes(clienteId);
+}
+
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
 
-  // Em ambiente de teste/demonstração, permite autenticar via header ou fallback para usr-admin
-  let usuarioId = 'usr-admin';
+  // Em ambiente de teste/demonstração, permite autenticar via header, query token ou fallback para admin padrão
+  let usuarioId: string = SEED_IDS.USUARIOS.ADMIN;
 
   if (authHeader && authHeader.startsWith('Bearer ')) {
     usuarioId = authHeader.replace('Bearer ', '').trim();
   } else if (req.headers['x-user-id']) {
     usuarioId = String(req.headers['x-user-id']);
+  } else if (req.query.token) {
+    usuarioId = String(req.query.token);
   }
 
   const usuario = store.usuarios.find((u) => u.id === usuarioId || u.email === usuarioId);

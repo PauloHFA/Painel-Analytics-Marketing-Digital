@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { store } from '../apps/api/src/db/store';
+import { SEED_IDS } from '../apps/api/src/db/ids';
 import { consolidarResumo, obterResumoComComparativo, gerarSerieTemporal } from '../apps/api/src/services/metricsService';
 import { isolamentoClienteMiddleware } from '../apps/api/src/middleware/auth';
 import { avaliarAlertasCliente } from '../apps/api/src/services/alertService';
@@ -22,13 +23,13 @@ async function executarChecklistDeAceite() {
   // -------------------------------------------------------------------------
   // CRITÉRIO 1: Isolamento Rigoroso de Dados por Cliente (Anti-IDOR)
   // -------------------------------------------------------------------------
-  const usuarioCliente = store.usuarios.find((u) => u.id === 'usr-cliente-01');
+  const usuarioCliente = store.usuarios.find((u) => u.id === SEED_IDS.USUARIOS.CLIENTE_01);
   assert.ok(usuarioCliente);
 
   let statusBloqueio = 0;
   const reqInvasivo: any = {
     usuario: usuarioCliente,
-    query: { clienteId: 'cli-02' },
+    query: { clienteId: SEED_IDS.CLIENTES.MODA_URBANA },
     params: {},
     body: {},
   };
@@ -78,12 +79,12 @@ async function executarChecklistDeAceite() {
   // CRITÉRIO 3: Tolerância a Falhas de Conexão de Mídia
   // -------------------------------------------------------------------------
   // Cliente 2 (Moda Urbana) tem Meta Ads com status 'requer_reconexao'
-  const alertas = avaliarAlertasCliente('cli-02', '2026-07-01', '2026-10-23');
+  const alertas = avaliarAlertasCliente(SEED_IDS.CLIENTES.MODA_URBANA, '2026-07-01', '2026-10-23');
   const temAlertaFalha = alertas.some((a) => a.tipo === 'conexao' && a.severidade === 'critico');
   assert.ok(temAlertaFalha, 'Alerta de falha deve estar visível');
 
   // Painel continua respondendo com as demais fontes (GA4, etc.) sem derrubar a aplicação
-  const resumoParcial = consolidarResumo('cli-02', '2026-07-01', '2026-10-23');
+  const resumoParcial = consolidarResumo(SEED_IDS.CLIENTES.MODA_URBANA, '2026-07-01', '2026-10-23');
   assert.ok(typeof resumoParcial.investimentoTotal === 'number', 'Resumo calculado mesmo com canal em falha');
   registrarSucesso(
     'Critério 3 - Tolerância a Falha em Fontes Externas',
@@ -101,13 +102,13 @@ async function executarChecklistDeAceite() {
   const strFim = dFim.toISOString().slice(0, 10);
 
   const resultadoPesado = obterResumoComComparativo({
-    clienteId: 'cli-01',
+    clienteId: SEED_IDS.CLIENTES.TECHNOVA,
     inicio: strInicio,
     fim: strFim,
     comparar: 'anterior',
   });
   const seriePesada = gerarSerieTemporal({
-    clienteId: 'cli-01',
+    clienteId: SEED_IDS.CLIENTES.TECHNOVA,
     inicio: strInicio,
     fim: strFim,
     comparar: 'anterior',
