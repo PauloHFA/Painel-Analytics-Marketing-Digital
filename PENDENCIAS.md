@@ -1,4 +1,4 @@
-# Pendências, Auditoria de Requisitos e Melhorias — DashBoardAnalytics (GrowMetrics)
+# 📋 Pendências e Próximos Passos — Painel-Analytics-Marketing-Digital (GrowMetrics)
 
 Auditoria técnica realizada comparando a especificação completa (`Projeto Freelancer Dashboard Analytics Personalizado para Agência de Marketing Digital.pdf`) com o código atual do monorepo (`packages/shared`, `apps/api`, `apps/web`, `database/`, `docker-compose.yml` e `.github/workflows/ci.yml`).
 

@@ -1,7 +1,7 @@
-# 🚀 GrowMetrics Analytics - Plataforma de BI & Analytics Multicliente
-### Sistema Centralizado de Inteligência de Marketing para Agências Digitais
+# 🚀 Painel-Analytics-Marketing-Digital (GrowMetrics Analytics)
+### Plataforma & Painel de BI e Analytics Multitenant para Agências de Marketing Digital
 
-[![CI/CD Pipeline](https://github.com/PauloHFA/Dashboard-Analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/PauloHFA/Dashboard-Analytics/actions)
+[![CI/CD Pipeline](https://github.com/PauloHFA/Painel-Analytics-Marketing-Digital/actions/workflows/ci.yml/badge.svg)](https://github.com/PauloHFA/Painel-Analytics-Marketing-Digital/actions)
 [![Tests Status](https://img.shields.io/badge/tests-32%20passing-emerald.svg)](apps/api/test)
 [![Acceptance Audit](https://img.shields.io/badge/acceptance%20audit-5%2F5%20passed-blue.svg)](scripts/acceptance_check.ts)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](packages/shared)
@@ -325,4 +325,4 @@ Para aprofundamento técnico e diretrizes de manutenção, consulte os documento
 ---
 
 ### 👨‍💻 Desenvolvido com Foco em Engenharia de Dados, Segurança e Excelência de UX.
-Repositório Oficial: [https://github.com/PauloHFA/Dashboard-Analytics.git](https://github.com/PauloHFA/Dashboard-Analytics.git)
+Repositório Oficial: [https://github.com/PauloHFA/Painel-Analytics-Marketing-Digital.git](https://github.com/PauloHFA/Painel-Analytics-Marketing-Digital.git)
